@@ -1,0 +1,92 @@
+import { Cpu, Database, Layers, Radar } from "lucide-react"
+import { SectionHeading } from "./section-heading"
+
+const STACK = [
+  { icon: Radar, label: "Computer Vision", tech: "YOLO · OpenCV" },
+  { icon: Cpu, label: "Inference", tech: "PyTorch · ONNX" },
+  { icon: Database, label: "Realtime Data", tech: "Streaming API" },
+  { icon: Layers, label: "Interface", tech: "React · Tailwind" },
+]
+
+export function About() {
+  return (
+    <section id="about" className="relative scroll-mt-24 py-16 sm:py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <SectionHeading
+          eyebrow="About the Project"
+          title={
+            <>
+              Built for the <span className="text-cyan">AI Immersion</span> program
+            </>
+          }
+          description="ParkSight AI is a student research project exploring how everyday computer vision can solve a genuinely painful, universal problem — with a product-grade experience."
+        />
+
+        <div className="mt-12 grid gap-6 lg:grid-cols-5">
+          <div className="glass rounded-3xl p-6 sm:p-8 lg:col-span-3">
+            <h3 className="font-display text-xl font-bold">The mission</h3>
+            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+              We set out to prove that a smarter parking experience does not require expensive
+              hardware in every space. By applying modern object detection to the cameras a
+              structure already has, we can surface live availability, predict demand, and guide
+              drivers — all through a single, elegant interface.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+              This build demonstrates the full concept end to end: a live simulated deck, a working
+              detection overlay, occupancy analytics, and an AI recommendation engine, wrapped in a
+              production-quality dashboard.
+            </p>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {STACK.map((s) => (
+                <div
+                  key={s.label}
+                  className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.03] p-3"
+                >
+                  <span className="grid size-9 place-items-center rounded-lg bg-electric/10 text-electric">
+                    <s.icon className="size-4.5" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{s.label}</div>
+                    <div className="text-xs text-foreground/45">{s.tech}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-6 lg:col-span-2">
+            <div className="glass flex-1 rounded-3xl p-6 sm:p-8">
+              <h3 className="font-display text-xl font-bold">Project scope</h3>
+              <dl className="mt-4 space-y-3 text-sm">
+                {[
+                  ["Type", "AI Immersion capstone"],
+                  ["Focus", "Applied computer vision"],
+                  ["Status", "Interactive prototype"],
+                  ["Data", "Realistic simulation"],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <dt className="text-foreground/45">{k}</dt>
+                    <dd className="font-medium text-foreground">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div
+              className="relative overflow-hidden rounded-3xl p-6 text-navy-900"
+              style={{ background: "linear-gradient(135deg, #38ff9c, #22d3ee)" }}
+            >
+              <Radar className="absolute -right-4 -bottom-4 size-28 opacity-20" />
+              <div className="relative">
+                <div className="font-display text-lg font-bold">Smarter cities start small.</div>
+                <p className="mt-1 text-sm font-medium text-navy-900/70">
+                  One parking deck at a time.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
