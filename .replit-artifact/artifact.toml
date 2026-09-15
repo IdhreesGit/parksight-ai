@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "ParkSight AI"
+description = "A polished college prototype that visualizes a clearly labeled simulated parking occupancy experience and transparent bay recommendations."
+version = "1.0.0"
+id = "artifacts/parksight-ai"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20864
+
+[services.development]
+run = "pnpm --filter @workspace/parksight-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/parksight-ai", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/parksight-ai/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20864"
+BASE_PATH = "/"
