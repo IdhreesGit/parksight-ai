@@ -1,0 +1,6 @@
+{
+  "name": "ParkSight AI - Smart Parking Platform",
+  "description": "AI-powered smart parking platform with real computer vision bay occupancy detection, digital twin simulation, transparent multi-factor recommendations, and predictive analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
