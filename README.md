@@ -1,57 +1,64 @@
 # ParkSight AI — Smart Parking Platform (Review 2)
 
-> **Academic Portfolio / AI Systems Prototype**  
-> An advanced smart-parking platform providing computer-vision occupancy analysis with external YOLO integration, digital twin state simulation, explainable multi-factor recommendations, indoor navigation routing, and predictive time-series analytics.
+## 1. Project Overview
+
+ParkSight AI is an academic AI engineering prototype designed to address parking-space search and occupancy visibility.
+
+The platform demonstrates computer-vision occupancy analysis with external YOLO integration, parking-bay IoU geometry, temporal occupancy stabilization, explainable recommendations, analytics, prediction, anomaly detection, navigation, and human feedback.
+
+Local neural model weights are not bundled with the web application. YOLO inference is accessed through an external HTTP service. When that service is unavailable, the system clearly reports a simulated/test fallback.
 
 ---
 
-## 1. PROJECT OVERVIEW
+## 2. The Problem
 
-**ParkSight AI** is an academic AI engineering prototype built to address urban parking congestion, wasted fuel, and driver frustration.
+Drivers may spend unnecessary time searching for available parking spaces when current parking occupancy is not visible.
 
-The platform provides computer-vision occupancy analysis with external YOLO integration, connecting vehicle detection telemetry to an end-to-end data pipeline with spatial IoU polygon matching, real-time bay occupancy classification, transparent driver recommendations, and operational anomaly detection.
+Key challenges include:
 
-Local neural model weights are not bundled directly in the web runtime. Instead, ParkSight integrates with external YOLO microservices through standard HTTP endpoints and automatically falls back safely to deterministic benchmark fixtures when the external service is unavailable.
-
----
-
-## 2. THE PROBLEM
-
-- **Urban Parking Friction:** Drivers may spend unnecessary time searching for available parking spaces when current occupancy is not visible.
-
-- **Sensor Fragility:** Single-frame computer vision can be affected by glare, shadows, and temporary occlusion, causing unstable vacancy reporting.
-
-- **Black-Box Guidance:** Parking recommendations can be difficult to trust when the system does not explain why a particular space was selected.
-
-- **Privacy Concerns:** Parking systems may process images containing faces or vehicle-identifying information, creating unnecessary privacy risks.
+- Unstable single-frame detection
+- Temporary visual occlusion
+- Difficult-to-trust recommendations
+- Limited occupancy visibility
+- Privacy concerns around camera imagery
 
 ---
 
-## 3. KEY FEATURES
+## 3. Key Features
 
-1. **Computer Vision & Occupancy Analysis:** Ingests image or video frames, normalizes inputs, interfaces with external YOLO inference services or benchmark fixtures, and calculates spatial polygon Intersection-over-Union (IoU) to classify parking-bay occupancy.
+1. **Computer Vision Occupancy Analysis**  
+   Supports image/frame processing and external YOLO detection.
 
-2. **Occupancy State Machine & Temporal Hysteresis:** Uses a three-frame confirmation process to reduce unstable state changes caused by temporary detection noise.
+2. **Parking-Bay IoU Logic**  
+   Uses geometric overlap between vehicle bounding boxes and parking-bay polygons.
 
-3. **End-to-End Pipeline Propagation:** Detection results can be propagated into parking state, dashboard KPIs, alerts, analytics, and recommendations.
+3. **Temporal Stability Filtering**  
+   Requires multiple consistent frames before confirming occupancy changes.
 
-4. **Explainable Multi-Factor Recommendations:** Uses a transparent prototype scoring model considering availability, distance, accessibility, EV alignment, aisle conditions, and state stability.
+4. **Explainable Recommendations**  
+   Uses transparent multi-factor prototype scoring.
 
-5. **Indoor Parking Navigation:** Provides prototype turn-by-turn guidance and 2D vector waypoint routing from facility entrance areas to selected parking bays.
+5. **Indoor Navigation**  
+   Generates prototype waypoint routes from entrance to parking bay.
 
-6. **Time-Series Prediction:** Provides short-term occupancy forecasting at +10, +20, and +30 minutes using Holt's Double Exponential Smoothing.
+6. **Short-Term Prediction**  
+   Uses Holt's Double Exponential Smoothing for occupancy forecasting.
 
-7. **Rule-Based Anomaly Detection:** Detects operational conditions such as rapid occupancy changes, state chatter, facility saturation, and camera feed failures.
+7. **Rule-Based Anomaly Detection**  
+   Detects rapid occupancy changes, state chatter, saturation, and camera failures.
 
-8. **Human Feedback Loop:** Supports parking-status dispute reporting and recommendation usefulness feedback.
+8. **Human Feedback Loop**  
+   Supports parking-status disputes and recommendation feedback.
 
-9. **Multimodal Scene Inspection:** Uses server-side Google Gemini multimodal analysis for environmental conditions such as lighting, glare, weather, and obstructions.
+9. **Gemini Scene Inspection**  
+   Provides multimodal environmental analysis when configured.
 
-10. **Privacy by Design:** Uses ephemeral frame processing, avoids facial recognition, and avoids unnecessary storage of personal identifying information.
+10. **Privacy by Design**  
+    Avoids facial recognition and unnecessary personal-data storage.
 
 ---
 
-## 4. ARCHITECTURE PIPELINE
+## 4. Architecture Pipeline
 
 ```text
 Camera / Uploaded Image / Video Frame
@@ -62,20 +69,19 @@ Camera / Uploaded Image / Video Frame
                 ↓
 3. YOLO / Computer Vision Vehicle Detection
                 ↓
-4. Spatial Bay IoU Overlap Logic
+4. Spatial Bay IoU Occupancy Logic
    (≥0.45 Occupied, ≤0.15 Available)
                 ↓
 5. Temporal Stability Filter
-   (3-Frame Confirmation Hysteresis)
+   (3-Frame Confirmation)
                 ↓
-6. Authoritative Digital Twin State Store
+6. Authoritative Parking State Store
                 ↓
-       ┌────────┼──────────┬──────────────┐
-       ↓        ↓          ↓              ↓
-   Dashboard  Events   Analytics    Rule Anomalies
-                       & Holt          & Dispatch
-                      Prediction           ↓
-                          ↓          Human Feedback
+       ┌────────┼──────────┬─────────────┐
+       ↓        ↓          ↓             ↓
+   Dashboard  Events   Analytics   Rule Anomalies
+                       & Prediction       ↓
+                           ↓        Human Feedback
                     Recommendations
-                          ↓
-                  Indoor Navigation
+                           ↓
+                   Indoor Navigation
