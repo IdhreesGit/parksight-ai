@@ -1,167 +1,169 @@
-# ParkSight AI — Smart Parking Platform (Review 3)
+# PARKSIGHT AI – PHASE 3 PROJECT REPORT
 
-## 1. Project Overview
+## 1. Introduction
 
-**ParkSight AI** is an AI Immersion Programme academic engineering project (**Task 01 — C29**, Rathinam Technical Campus, Coimbatore) designed to address parking-space search inefficiency and real-time occupancy visibility.
+ParkSight AI is a smart parking management web application developed to address the everyday problem of finding available parking spaces in crowded parking areas. Drivers visiting shopping centres, colleges, hospitals, offices, and public places may spend unnecessary time searching for an empty parking bay. This can cause traffic congestion within parking areas, increase fuel consumption, create frustration, and reduce the overall parking experience.
 
-The platform integrates a React 19 + TypeScript + Vite frontend with an Express backend providing computer-vision occupancy analysis via an external YOLO HTTP adapter, 2D parking-bay polygon IoU geometry, 3-frame temporal hysteresis stabilization, explainable 100-point heuristic recommendations, entrance-aware indoor waypoint navigation, Holt's Double Exponential Smoothing forecasts, rule-based anomaly detection, and human-in-the-loop dispute feedback.
+The main objective of ParkSight AI is to demonstrate how software, computer vision concepts, data processing, and intelligent recommendations can improve parking management. The project provides a web-based interface through which users can explore parking information, view parking occupancy, identify available spaces, and receive recommendations for suitable parking bays.
 
-Local neural model weights are not bundled with the web application. Live YOLO neural inference is accessed through an external HTTP service (`YOLO_SERVICE_URL`). When that external service is unavailable, the system never fabricates live AI results—it explicitly reports **`YOLO SERVICE UNAVAILABLE — SIMULATED FALLBACK ACTIVE`**.
+Phase 3 focuses on improving the project's technical stability, frontend and backend integration, API functionality, deployment, and readiness for demonstration. The current version is an academic prototype that uses simulated parking activity to demonstrate its features. It provides a foundation for future integration with a real computer vision service.
 
----
+## 2. Problem Statement
 
-## 2. The Problem
+Traditional parking facilities often require drivers to search manually for vacant spaces. In many locations, drivers do not have access to accurate, centralised information about parking availability. They may drive through multiple rows before finding a suitable space.
 
-Drivers spend unnecessary time cruising parking aisles when current stall availability is not visible at facility entrances.
+This problem becomes more noticeable during busy periods when parking demand is high. Repeated searching wastes time and fuel and may contribute to unnecessary vehicle movement and congestion.
 
-Key operational challenges addressed:
+A software-based parking assistance system can help address this problem by presenting parking availability in an organised digital interface. By displaying occupancy information and suggesting suitable spaces, such a system can make the parking process more convenient and efficient.
 
-- Unstable single-frame optical detection (pedestrian shadows, glare, transient headlights)
-- Temporary visual occlusion and boundary straddling (`0.15 < IoU < 0.45`)
-- Opaque "black-box" parking recommendations that drivers cannot verify
-- Discrepancies between available, occupied, reserved, and maintenance stall counts
-- Privacy concerns around camera imagery and license plates
+ParkSight AI explores this solution through a web application that combines parking data, simulated occupancy updates, recommendation logic, and a user-friendly interface.
 
----
+## 3. Project Objectives
 
-## 3. Key Features & Review 3 Improvements
+The main objectives of ParkSight AI are:
 
-1. **Computer Vision Occupancy Analysis & PNG Preset Pipeline**  
-   Processes uploaded frames and offscreen-rendered 640×360 PNG test scenes through an external YOLO HTTP adapter with explicit simulated fallback labeling.
+1. To develop an accessible and responsive smart parking website.
+2. To present parking lots, parking bays, and occupancy information in an organised format.
+3. To demonstrate how available spaces can be recommended to drivers.
+4. To provide backend API endpoints for parking information and system health checks.
+5. To explore how computer vision services could supply vehicle and parking occupancy data.
+6. To demonstrate parking activity using a simulation engine when live detection is unavailable.
+7. To deploy the application online so that users and evaluators can access it through a browser.
+8. To create a maintainable project structure that supports future improvements.
 
-2. **Spatial Parking-Bay IoU Geometry**  
-   Computes exact 2D bounding-box-to-bay-polygon overlap without leaking prior stall status into IoU scores.
+## 4. Proposed Solution
 
-3. **3-Frame Temporal Stability State Machine**  
-   Requires 3 consecutive matching observations (`confirmed_available` ↔ `candidate_occupied` ↔ `confirmed_occupied`) before committing transitions, while protecting `reserved` and `maintenance` stalls from automated CV overwrite.
+ParkSight AI provides a centralised digital interface for exploring parking availability. Instead of relying entirely on manual searching, users can interact with the website and view the parking information made available by the application.
 
-4. **Verified Multi-Lot & 4×24 Section Capacity Accounting**  
-   Enforces `availableBays + occupiedBays + reservedBays + maintenanceBays === totalBays` across all 4 campus facilities (`campus-deck`: 96 bays across 4 symmetrical 24-bay sections including `West Deck`; `north-lot`: 120; `south-lot`: 80; `visitor-deck`: 45) and preserves non-parkable stalls across simulation resets.
+The frontend presents the information in a visual and understandable way. The backend provides structured data through API endpoints. The application can use simulated parking activity to demonstrate changing occupancy and recommendations.
 
-5. **Explainable 100-Point Recommendations & Entrance-Aware Routing**  
-   Evaluates hard constraints (ADA, Level 2 EV, walking radius) and computes gate-specific walking distances from `Main Entrance (North)`, `East Walkway`, `South Ramp`, and `West Transit Center`.
+The project also explores the integration of an external YOLO-based computer vision service. Such a service could analyse camera images and identify vehicles or parking occupancy. However, real-time CCTV detection depends on configuring and connecting a suitable external inference service. The currently deployed demonstration operates in simulated mode and does not claim to perform live CCTV detection.
 
-6. **Short-Term Occupancy Prediction (Holt's Double Exponential Smoothing)**  
-   Forecasts `+10m`, `+20m`, and `+30m` occupancy horizons with interactive level smoothing (`α`) and residual-derived 95% confidence bounds.
+## 5. Technology Stack
 
-7. **Seedable Digital Twin Simulation**  
-   Deterministic Mulberry32 PRNG traffic generator with live seed control and 6 operational benchmark presets (`morning_rush`, `midday_turnover`, `evening_exodus`, `night_lull`, `camera_failure`, `unusual_spike`).
+The project uses the following technologies:
 
-8. **Rule-Based Anomaly Detection & Human Feedback Loop**  
-   Flags surges, bay state chatter, saturation, and camera heartbeat drops with structured explanations, alongside crowd-sourced status dispute overrides.
+**Frontend:** React 19, TypeScript, Vite, and Tailwind CSS are used to build the interactive user interface and support a maintainable frontend structure.
 
-9. **Server-Side Gemini Multimodal Scene Inspection**  
-   Uses `@google/genai` (`gemini-3.8-flash`) with structured JSON schema on the Express backend when `GEMINI_API_KEY` is configured, falling back transparently when offline.
+**Backend:** Node.js and Express provide server-side functionality and API endpoints for parking information and system health.
 
-10. **Privacy by Design**  
-    Processes frames transiently in memory, masks license identifiers, and performs zero facial recognition.
+**Data Processing:** TypeScript-based application logic supports parking data processing, occupancy handling, recommendation calculations, and simulation behaviour.
 
----
+**Computer Vision Integration:** The architecture supports integration with an external YOLO-based inference service. OpenCV and related computer vision tools may be used within an appropriately configured detection pipeline.
 
-## 4. Architecture Pipeline
+**Deployment:** GitHub is used for source-code version control, while Vercel hosts the deployed web application and supports the configured serverless API functionality.
 
-```text
-Camera / Uploaded Image / 640x360 PNG Test Frame
-                        ↓
-        1. Data Acquisition & Frame Decode
-                        ↓
-        2. Pre-processing & Normalization
-                        ↓
-        3. External YOLO Adapter / Sim Fallback
-                        ↓
-        4. Spatial Bay IoU Occupancy Logic
-           (≥0.45 Occupied, ≤0.15 Available, 0.15–0.45 Unknown)
-                        ↓
-        5. Temporal Stability Filter
-           (3-Frame Hysteresis Confirmation)
-                        ↓
-        6. Authoritative Parking State Store
-                        ↓
-       ┌────────┼──────────┬─────────────┐
-       ↓        ↓          ↓             ↓
-   Dashboard  Events   Analytics   Rule Anomalies
-   & 2D Map            & Holt (α)        ↓
-                           ↓        Human Feedback
-                    Recommendations
-                           ↓
-                   Indoor Navigation
-```
+These technologies provide a practical foundation for developing and demonstrating a software-based parking management prototype.
 
----
+## 6. System Architecture
 
-## 5. Real vs Simulated Systems (Academic Transparency)
+ParkSight AI follows a frontend-backend architecture. The frontend is responsible for presenting information and receiving user interactions. The backend processes requests and returns structured responses through API endpoints.
 
-| Subsystem | Status | Description |
-|---|---|---|
-| Spatial 2D IoU & Hysteresis | REAL | Deterministic geometric overlap and 3-frame state machine |
-| External YOLO Integration | INTEGRATION READY | HTTP adapter (`YOLO_SERVICE_URL`); requires external YOLO server for live neural inference |
-| YOLO Offline Fallback | SIMULATED | Explicitly labeled `YOLO SERVICE UNAVAILABLE — SIMULATED FALLBACK ACTIVE` when external YOLO is unreachable |
-| Gemini Scene Inspection | REAL WHEN CONFIGURED | Server-side `@google/genai` (`gemini-3.8-flash`) multimodal scene inspection |
-| Digital Twin Traffic | SIMULATED | Mulberry32 PRNG arrival/departure simulation across 96 bays |
-| Recommendation Engine | PROTOTYPE | Transparent 100-point multi-factor heuristic objective function |
-| Demand Prediction | PROTOTYPE | Holt's Double Exponential Smoothing (`S_t`, `b_t`) with configurable `α` |
-| Anomaly Detection | REAL (RULES) | Deterministic threshold rules over rolling telemetry |
-| Indoor Navigation | PROTOTYPE | Entrance-aware 2D vector waypoint & ramp routing |
+The application can obtain parking data from its simulation engine. The simulation provides example parking occupancy and vehicle activity, allowing the interface to demonstrate how a smart parking system might behave without requiring physical sensors or a live camera installation.
 
----
+The architecture also includes a possible connection to an external computer vision service. In a future live implementation, camera frames could be processed by that service, and its detections could be converted into occupancy information for the application.
 
-## 6. REST API Reference
+The main workflow is:
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/health` | Service health check, runtime mode, and external YOLO configuration flag |
-| GET | `/api/parking` | Authoritative 96-bay state, 4 facility lots, recent events, and active mode |
-| GET | `/api/lots` | Multi-lot directory with verified `available + occupied + reserved + maintenance = total` math |
-| GET | `/api/occupancy` | Live occupancy metrics (supports `?lotId=campus-deck\|north-lot\|south-lot\|visitor-deck`) |
-| POST | `/api/recommendations` | Entrance-aware 100-point heuristic recommendations & hard constraint filtering |
-| POST | `/api/recommendations/feedback` | Driver recommendation acceptance & rating feedback |
-| GET | `/api/navigation/route` | Turn-by-turn indoor waypoint routing (`?bayId=&entrance=`) |
-| GET | `/api/analytics` | Historical & diurnal time-series telemetry (`?range=today\|7d\|30d`) |
-| GET | `/api/prediction` | Holt's Double Exponential Smoothing (`?horizon=10\|20\|30&alpha=0.1..0.8`) |
-| GET | `/api/alerts` | Rule-based anomaly & operations alerts |
-| POST | `/api/alerts/:id/read` | Acknowledge operational alert |
-| POST | `/api/feedback` | Crowd-sourced bay status dispute override |
-| POST | `/api/detection/analyze` | 6-stage CV pipeline with external YOLO adapter + honest fallback |
-| POST | `/api/detection/propagate` | Propagate CV detections into authoritative store (protects reserved/maintenance stalls) |
-| POST | `/api/vision/gemini-inspect` | Server-side Gemini 3.8 Flash multimodal environmental inspection (PNG/JPEG/WebP) |
-| POST | `/api/simulation/settings` | Digital Twin speed, scenario presets, and Mulberry32 PRNG seed control |
-| POST | `/api/simulation/step` | Advance deterministic simulation by 1 tick (+2 simulated minutes) |
-| POST | `/api/simulation/reset` | Reset baseline while preserving reserved & maintenance bay allocations |
-| GET | `/api/system-status` | Genuine subsystem health audit (`ONLINE` / `SIMULATED FALLBACK` / `NOT CONFIGURED`) |
-| GET | `/api/observability` | Rolling API latency, tick rate, event counter, and error telemetry |
+1. A user opens the ParkSight AI website.
+2. The frontend requests relevant parking information from the backend.
+3. The backend returns structured parking and bay data.
+4. The interface displays the available information and simulated activity.
+5. Recommendation logic can use the available parking data to identify a suitable bay.
+6. The user explores the displayed information and follows the suggested parking option.
 
----
+This modular structure separates the user interface from the backend and allows future development without redesigning the entire system.
 
-## 7. Running Locally & Verification
+## 7. Major Features
 
-```bash
-# Install dependencies
-npm install
+### 7.1 Parking Occupancy Display
 
-# Start full-stack Express + Vite server on port 3000
-npm run dev
+The application presents parking information in a structured format so users can understand the state of parking facilities. The prototype uses simulated data to demonstrate occupancy information and the relationship between parking bays and parking lots.
 
-# Run 12-suite automated verification harness
-npm test
+### 7.2 AI-Based Recommendation Concept
 
-# Type-check client and server TypeScript
-npm run lint
+ParkSight AI demonstrates a recommendation interface intended to help users identify a suitable parking space. Factors such as walking distance, distance to a destination, and congestion-related information can be used in recommendation logic. These recommendations should be understood as prototype outputs based on the data currently available.
 
-# Build production SPA bundle and start Node 22 native TypeScript server
-npm run build
-npm start
-```
+### 7.3 Parking Navigation Concept
 
-Optional `.env` configuration (see `.env.example`):
+The interface explores guiding users towards a recommended parking section, row, or bay. This feature demonstrates how parking information could be connected to a navigation workflow. Actual turn-by-turn navigation depends on the accuracy and completeness of the facility's mapped layout.
 
-```env
-GEMINI_API_KEY="your-gemini-api-key"
-YOLO_SERVICE_URL="http://localhost:8000/api/v1/yolo/detect"
-```
+### 7.4 Simulation Engine
 
----
+The simulation engine generates example parking activity so the website can demonstrate occupancy changes and related interface features. This makes it possible to test the application without installing cameras, sensors, or other physical equipment.
 
-## 8. Deployment & Vercel Serverless Support
+### 7.5 Backend API
 
-- **Container / Node 22 Runtime**: Runs as a unified Express + SPA server via `npm run build && npm start` (`node server.ts` on port `3000`).
-- **Vercel Serverless Compatibility (`vercel.json` + `api/index.ts`)**: Earlier static-only deployments (`https://parksight-ai-six.vercel.app`) served pre-rendered frontend assets without mounting Express, causing `/api/*` endpoints to return HTTP `404`. Review 3 includes `api/index.ts` and `vercel.json` rewrites so redeploying this repository to Vercel mounts the full Express `/api/*` router as a Vercel Serverless Function alongside the static Vite `dist/` bundle (with poll-driven simulation ticks when `process.env.VERCEL` is active). Because serverless functions keep in-memory state per warm lambda instance rather than across cold starts, full multi-instance persistence requires an external database or a single-container host.
+The backend exposes endpoints that provide structured application data. The health endpoint helps verify that the service is running, while the parking endpoint provides parking lot and bay information.
+
+### 7.6 Responsive User Interface
+
+The website is designed to present its information through a browser-based interface. Its components organise parking data, recommendations, system information, and related features into a single application.
+
+## 8. Phase 3 Implementation and Improvements
+
+During Phase 3, attention was given to improving the project's build stability, deployment configuration, and backend accessibility.
+
+A dependency compatibility issue involving esbuild was addressed by updating its development dependency version in the project configuration. Dependencies were installed successfully, and the production build was checked before deployment.
+
+The deployment configuration was adjusted to use Vite as the frontend framework in Vercel. The latest Review 3 code was committed to the dedicated GitHub branch named review-3 and deployed through Vercel.
+
+The deployed application was tested through its website interface and backend endpoints. The health endpoint returned a successful service response containing version, review stage, runtime, and simulation information. The parking endpoint also returned structured parking data.
+
+These checks indicate that the deployed prototype and its tested API routes were responding successfully at the time of verification.
+
+## 9. Testing and Validation
+
+Testing focused on confirming that the application could build, deploy, and return expected responses.
+
+**Build testing:** The project's dependencies were installed, and the production build completed successfully after the dependency fix.
+
+**Website testing:** The deployed website was opened in a browser, and the user interface and tested features were checked.
+
+**API health testing:** The health endpoint was accessed to verify that the backend service responded with a status of OK.
+
+**Parking data testing:** The parking endpoint was accessed and returned parking lot and bay data, including simulation-related fields.
+
+**Deployment testing:** The latest Review 3 commit was deployed successfully to Vercel with a Ready status.
+
+These tests validate the main prototype workflow and deployment. They do not establish production-level reliability, real-world detection accuracy, or performance under large numbers of simultaneous users. Additional testing would be required before operational use.
+
+## 10. Deployment and Version Control
+
+The source code is maintained in the public GitHub repository:
+
+https://github.com/IdhreesGit/parksight-ai
+
+The latest Review 3 implementation is maintained on the review-3 branch:
+
+https://github.com/IdhreesGit/parksight-ai/tree/review-3
+
+The deployed website is available at:
+
+https://parksight-m9df3lht6-idhreesanbia2015-3707.vercel.app
+
+Git and GitHub provide version control and a record of code changes. Vercel provides the hosting environment used for the deployed demonstration. Keeping Review 3 on a separate branch allows the latest implementation to be reviewed without automatically replacing the main branch.
+
+## 11. Limitations
+
+ParkSight AI is currently an academic prototype. Its parking activity is simulated, and its displayed occupancy information should not be interpreted as verified live parking availability.
+
+Real-time operation would require a configured computer vision inference service, appropriate camera input, reliable communication between services, and validation of detection results. The quality of occupancy information would depend on camera placement, lighting, occlusion, model performance, and the mapping of detected vehicles to parking bays.
+
+The current demonstration also does not prove that its recommendations reduce parking search time by a specific percentage. Such outcomes would need to be measured through controlled testing in an actual parking facility.
+
+## 12. Future Scope
+
+Future improvements could include connecting a real YOLO-based detection service, testing the system with authorised camera feeds, and improving occupancy accuracy through real-world validation.
+
+Other possible improvements include user accounts, parking reservations, live occupancy updates, facility-specific navigation maps, accessibility-based recommendations, historical occupancy analytics, and notifications when suitable spaces become available.
+
+Performance monitoring, security reviews, privacy safeguards, automated testing, and evaluation under different traffic conditions would also be important before using the system in an actual parking facility.
+
+## 13. Conclusion
+
+ParkSight AI demonstrates how a software-based smart parking application can organise parking information and present occupancy data, recommendations, and navigation concepts through a web interface. Phase 3 strengthened the project's build configuration, deployment setup, API accessibility, and demonstration readiness.
+
+The project successfully demonstrates a working prototype using simulated parking activity, with a technical structure that can support future computer vision integration. Although live CCTV-based detection has not been established in the current deployment, the prototype provides a useful starting point for further research and development in intelligent parking management.
+
+Overall, ParkSight AI illustrates the potential of combining web technologies, structured parking data, simulation, and recommendation logic to explore a more convenient parking experience.
