@@ -8,6 +8,7 @@ export type VehicleClass = 'car' | 'truck' | 'suv' | 'motorcycle' | 'bus';
 
 export interface YoloDetectionInput {
   imageBufferOrBase64: string;
+  presetHint?: string;
   confidenceThreshold?: number; // default 0.50
   iouThreshold?: number; // NMS IoU threshold, default 0.45
   modelVariant?: 'yolov8n' | 'yolov8s' | 'yolov8m' | 'yolov11n';
@@ -194,12 +195,47 @@ export class LocalDeterministicYoloAdapter implements IYoloServiceAdapter {
     const startTime = performance.now();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    const detections: YoloRawDetection[] = [
-      { class: 'car', confidence: 0.94, bbox: [12.5, 14.0, 16.0, 18.0], trackId: 101 },
-      { class: 'suv', confidence: 0.89, bbox: [32.0, 14.5, 17.5, 18.2], trackId: 102 },
-      { class: 'car', confidence: 0.92, bbox: [72.0, 14.2, 16.2, 17.8], trackId: 103 },
-      { class: 'truck', confidence: 0.86, bbox: [52.4, 52.0, 18.0, 20.0], trackId: 104 },
-    ];
+    let detections: YoloRawDetection[];
+    if (input.presetHint === 'sample-day') {
+      // Clear daylight fixture aligned to North Deck Rows A & B (6 occupied, 18 vacant)
+      detections = [
+        { class: 'car', confidence: 0.96, bbox: [8.0, 10.0, 6.2, 12.0], trackId: 101 },   // A1
+        { class: 'suv', confidence: 0.94, bbox: [30.5, 10.0, 6.2, 12.0], trackId: 102 },  // A4
+        { class: 'car', confidence: 0.93, bbox: [53.0, 10.0, 6.2, 12.0], trackId: 103 },  // A7
+        { class: 'car', confidence: 0.95, bbox: [75.5, 10.0, 6.2, 12.0], trackId: 104 },  // A10
+        { class: 'car', confidence: 0.92, bbox: [15.5, 28.0, 6.2, 12.0], trackId: 105 },  // B2
+        { class: 'suv', confidence: 0.91, bbox: [45.5, 28.0, 6.2, 12.0], trackId: 106 },  // B6
+      ];
+    } else if (input.presetHint === 'sample-rain') {
+      // Wet surface / overcast fixture (7 occupied, 16 vacant, 1 indeterminate reflection/partial overlap)
+      detections = [
+        { class: 'car', confidence: 0.91, bbox: [15.5, 10.0, 6.2, 12.0], trackId: 201 },  // A2
+        { class: 'suv', confidence: 0.89, bbox: [38.0, 10.0, 6.2, 12.0], trackId: 202 },  // A5
+        { class: 'car', confidence: 0.90, bbox: [60.5, 10.0, 6.2, 12.0], trackId: 203 },  // A8
+        { class: 'truck', confidence: 0.88, bbox: [83.0, 10.0, 6.2, 12.0], trackId: 204 },// A11
+        { class: 'car', confidence: 0.92, bbox: [8.0, 28.0, 6.2, 12.0], trackId: 205 },   // B1
+        { class: 'car', confidence: 0.87, bbox: [30.5, 28.0, 6.2, 12.0], trackId: 206 },  // B4
+        { class: 'suv', confidence: 0.86, bbox: [68.0, 28.0, 6.2, 12.0], trackId: 207 },  // B9
+        { class: 'car', confidence: 0.64, bbox: [83.0, 28.0, 6.2, 4.0], trackId: 208 },   // B11 partial (~0.33 IoU -> Indeterminate)
+      ];
+    } else if (input.presetHint === 'sample-night') {
+      // Low-illumination night fixture (4 occupied, 18 vacant, 2 indeterminate shadow/glare boxes)
+      detections = [
+        { class: 'car', confidence: 0.88, bbox: [23.0, 10.0, 6.2, 12.0], trackId: 301 },  // A3
+        { class: 'suv', confidence: 0.85, bbox: [68.0, 10.0, 6.2, 12.0], trackId: 302 },  // A9
+        { class: 'car', confidence: 0.87, bbox: [23.0, 28.0, 6.2, 12.0], trackId: 303 },  // B3
+        { class: 'car', confidence: 0.84, bbox: [75.5, 28.0, 6.2, 12.0], trackId: 304 },  // B10
+        { class: 'car', confidence: 0.58, bbox: [45.5, 10.0, 6.2, 3.6], trackId: 305 },   // A6 partial (~0.30 IoU -> Indeterminate)
+        { class: 'suv', confidence: 0.61, bbox: [53.0, 28.0, 6.2, 3.8], trackId: 306 },   // B7 partial (~0.32 IoU -> Indeterminate)
+      ];
+    } else {
+      detections = [
+        { class: 'car', confidence: 0.94, bbox: [12.5, 14.0, 16.0, 18.0], trackId: 101 },
+        { class: 'suv', confidence: 0.89, bbox: [32.0, 14.5, 17.5, 18.2], trackId: 102 },
+        { class: 'car', confidence: 0.92, bbox: [72.0, 14.2, 16.2, 17.8], trackId: 103 },
+        { class: 'truck', confidence: 0.86, bbox: [53.0, 28.0, 6.2, 12.0], trackId: 104 },
+      ];
+    }
 
     const confThreshold = input.confidenceThreshold || 0.5;
     const filtered = detections.filter((d) => d.confidence >= confThreshold);
@@ -210,7 +246,7 @@ export class LocalDeterministicYoloAdapter implements IYoloServiceAdapter {
       inferenceTimeMs: elapsed,
       modelVersion: this.modelVersion,
       backend: 'local_deterministic_fixture',
-      inputResolution: [640, 640],
+      inputResolution: [640, 360],
       rawTotalObjectsFound: filtered.length,
       timestamp: new Date().toISOString(),
     };

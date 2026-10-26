@@ -1,35 +1,187 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ScanEye,
-  Camera,
   Upload,
   Sparkles,
-  Layers,
   Cpu,
   CheckCircle2,
-  AlertTriangle,
-  Info,
-  Radio,
   FileImage,
-  ArrowRight,
-  Video,
-  Play,
-  Pause,
   RotateCw,
   Eye,
   Send,
-  Zap,
+  Layers,
 } from 'lucide-react';
 import { useParking } from '../../context/ParkingContext';
-import { analyzeDetectionImage, propagateDetections } from '../../services/api';
-import { DetectionResult, BoundingBox, DetectionSourceType } from '../../types';
+import { analyzeDetectionImage } from '../../services/api';
+import { DetectionResult, DetectionSourceType } from '../../types';
+
+interface PresetVehicleSpec {
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+  color: string;
+  label: string;
+}
+
+const PRESET_VEHICLES: Record<string, PresetVehicleSpec[]> = {
+  'sample-day': [
+    { xPct: 8.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#38bdf8', label: 'SEDAN' },
+    { xPct: 30.5, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#f43f5e', label: 'SUV' },
+    { xPct: 53.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#cbd5e1', label: 'SEDAN' },
+    { xPct: 75.5, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#22c55e', label: 'EV' },
+    { xPct: 15.5, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#f59e0b', label: 'COMPACT' },
+    { xPct: 45.5, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#a855f7', label: 'SUV' },
+  ],
+  'sample-rain': [
+    { xPct: 15.5, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#60a5fa', label: 'SEDAN' },
+    { xPct: 38.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#fb7185', label: 'SUV' },
+    { xPct: 60.5, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#94a3b8', label: 'SEDAN' },
+    { xPct: 83.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#f97316', label: 'TRUCK' },
+    { xPct: 8.0, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#2dd4bf', label: 'EV' },
+    { xPct: 30.5, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#e2e8f0', label: 'SEDAN' },
+    { xPct: 68.0, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#facc15', label: 'SUV' },
+    { xPct: 83.0, yPct: 24.5, wPct: 6.2, hPct: 7.5, color: '#64748b', label: 'PARTIAL' },
+  ],
+  'sample-night': [
+    { xPct: 23.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#38bdf8', label: 'SEDAN' },
+    { xPct: 68.0, yPct: 10.0, wPct: 6.2, hPct: 12.0, color: '#cbd5e1', label: 'SUV' },
+    { xPct: 23.0, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#34d399', label: 'EV' },
+    { xPct: 75.5, yPct: 28.0, wPct: 6.2, hPct: 12.0, color: '#f87171', label: 'SEDAN' },
+    { xPct: 45.5, yPct: 7.2, wPct: 6.2, hPct: 6.4, color: '#475569', label: 'OCCLUDED' },
+    { xPct: 53.0, yPct: 25.4, wPct: 6.2, hPct: 6.4, color: '#475569', label: 'SHADOW' },
+  ],
+};
+
+function renderPresetFramePngDataUri(presetType: string): string {
+  if (typeof document === 'undefined') return '';
+  const offscreen = document.createElement('canvas');
+  offscreen.width = 640;
+  offscreen.height = 360;
+  const ctx = offscreen.getContext('2d');
+  if (!ctx) return '';
+
+  const isNight = presetType === 'sample-night';
+  const isRain = presetType === 'sample-rain';
+
+  // 1. Deck concrete & asphalt surface
+  ctx.fillStyle = isNight ? '#060a14' : isRain ? '#131c2e' : '#1e293b';
+  ctx.fillRect(0, 0, 640, 360);
+
+  ctx.fillStyle = isNight ? '#090f1d' : isRain ? '#0f172a' : '#162032';
+  ctx.fillRect(24, 24, 592, 312);
+
+  // 2. Painted Bay Markings (Row A y=10..22%, Row B y=28..40% of 360px)
+  const scaleX = 640 / 100;
+  const scaleY = 360 / 100;
+
+  ctx.strokeStyle = isNight ? 'rgba(148, 163, 184, 0.35)' : 'rgba(203, 213, 225, 0.55)';
+  ctx.lineWidth = 1.5;
+
+  [10, 28].forEach((rowYPct, rIdx) => {
+    for (let col = 0; col < 12; col++) {
+      const x = (8 + col * 7.5) * scaleX;
+      const y = rowYPct * scaleY;
+      const w = 6.2 * scaleX;
+      const h = 12.0 * scaleY;
+      ctx.strokeRect(x, y, w, h);
+
+      ctx.fillStyle = isNight ? 'rgba(148, 163, 184, 0.32)' : 'rgba(148, 163, 184, 0.5)';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(`${rIdx === 0 ? 'A' : 'B'}${col + 1}`, x + 4, y + h - 5);
+    }
+  });
+
+  // 3. Driving aisle centerlines
+  ctx.strokeStyle = isNight ? 'rgba(234, 179, 8, 0.45)' : 'rgba(234, 179, 8, 0.75)';
+  ctx.setLineDash([10, 8]);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(40, 25 * scaleY);
+  ctx.lineTo(600, 25 * scaleY);
+  ctx.moveTo(40, 52 * scaleY);
+  ctx.lineTo(600, 52 * scaleY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 4. Environmental wet puddles (Rain preset)
+  if (isRain) {
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+    ctx.beginPath();
+    ctx.ellipse(210, 195, 65, 18, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(470, 225, 80, 22, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 5. Render Vehicles
+  const vehicles = PRESET_VEHICLES[presetType] || PRESET_VEHICLES['sample-day'];
+  vehicles.forEach((v) => {
+    const vx = v.xPct * scaleX + 2;
+    const vy = v.yPct * scaleY + 2;
+    const vw = v.wPct * scaleX - 4;
+    const vh = v.hPct * scaleY - 4;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+    ctx.fillRect(vx + 2, vy + 2, vw, vh);
+
+    // Body
+    ctx.fillStyle = v.color;
+    ctx.fillRect(vx, vy, vw, vh);
+
+    // Windshield
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.fillRect(vx + 4, vy + 6, Math.max(6, vw - 8), Math.max(5, vh * 0.28));
+
+    // Night headlamp glow
+    if (isNight) {
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.22)';
+      ctx.fillRect(vx + 2, vy + vh, vw - 4, 14);
+    }
+  });
+
+  // 6. Rain diagonal streaks or Night low-lux vignette
+  if (isRain) {
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.18)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 36; i++) {
+      const rx = (i * 37) % 620;
+      const ry = (i * 53) % 320;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx - 8, ry + 22);
+      ctx.stroke();
+    }
+  } else if (isNight) {
+    const grad = ctx.createRadialGradient(320, 140, 80, 320, 180, 360);
+    grad.addColorStop(0, 'rgba(2, 6, 23, 0.05)');
+    grad.addColorStop(1, 'rgba(2, 6, 23, 0.58)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 640, 360);
+  }
+
+  // 7. Camera HUD Telemetry Bar
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.82)';
+  ctx.fillRect(24, 298, 592, 30);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(
+    `PARKSIGHT CCTV CAM-04 • NORTH DECK ROWS A-B • 640x360 PNG • ${presetType.toUpperCase()}`,
+    36,
+    317
+  );
+
+  return offscreen.toDataURL('image/png');
+}
 
 export const AIDetectionView: React.FC = () => {
-  const { bays, propagateRealDetections, systemMode } = useParking();
+  const { propagateRealDetections } = useParking();
 
   const [activeEngine, setActiveEngine] = useState<'simulation' | 'yolo_interface'>('yolo_interface');
   const [yoloEndpoint, setYoloEndpoint] = useState('http://localhost:8000/api/v1/yolo/detect');
-  const [inputType, setInputType] = useState<'sample' | 'upload' | 'camera'>('sample');
+  const [inputType, setInputType] = useState<'sample' | 'upload'>('sample');
   const [selectedSample, setSelectedSample] = useState<string>('sample-day');
   const [customImage, setCustomImage] = useState<string | null>(null);
 
@@ -37,55 +189,104 @@ export const AIDetectionView: React.FC = () => {
   const [runGeminiAssessment, setRunGeminiAssessment] = useState(true);
   const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
   const [propagationNotice, setPropagationNotice] = useState<string | null>(null);
-  const [isLiveCameraActive, setIsLiveCameraActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Generate realistic high-fidelity SVG frame payload for reproducible test presets
-  const getSampleImageDataUri = (type: string): string => {
-    const isNight = type === 'sample-night';
-    const isRain = type === 'sample-rain';
-    const bgColor = isNight ? '#0b1120' : isRain ? '#1e293b' : '#334155';
-    const roadColor = isNight ? '#020617' : '#0f172a';
+  const drawDetectionsOnCanvas = useCallback((result: DetectionResult, frameDataUri: string) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="${bgColor}"/>
-      <rect x="30" y="30" width="580" height="300" fill="${roadColor}" rx="10"/>
-      <!-- Parking Slot Painted Boundaries -->
-      <line x1="80" y1="50" x2="80" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
-      <line x1="180" y1="50" x2="180" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
-      <line x1="280" y1="50" x2="280" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
-      <line x1="380" y1="50" x2="380" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
-      <line x1="480" y1="50" x2="480" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
-      <line x1="580" y1="50" x2="580" y2="180" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6,4"/>
+    const renderBoxes = () => {
+      const scaleX = canvas.width / 100;
+      const scaleY = canvas.height / 100;
 
-      <!-- Actual Vehicles in bays with varying colors -->
-      <rect x="95" y="65" width="70" height="95" rx="8" fill="#38bdf8"/>
-      <text x="130" y="115" fill="#ffffff" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">SEDAN</text>
+      result.detections.forEach((box) => {
+        const x = box.x * scaleX;
+        const y = box.y * scaleY;
+        const w = box.width * scaleX;
+        const h = box.height * scaleY;
 
-      <rect x="295" y="65" width="70" height="95" rx="8" fill="#f43f5e"/>
-      <text x="330" y="115" fill="#ffffff" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">SUV</text>
+        ctx.lineWidth = 1.8;
 
-      <rect x="495" y="65" width="70" height="95" rx="8" fill="#e2e8f0"/>
-      <text x="530" y="115" fill="#0f172a" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">EV</text>
+        const isUnknown = box.label.includes('Unknown') || box.label.includes('Low Confidence');
+        if (box.isOccupied) {
+          ctx.strokeStyle = '#f43f5e';
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.22)';
+        } else if (isUnknown) {
+          ctx.strokeStyle = '#eab308';
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.22)';
+        } else {
+          ctx.strokeStyle = '#10b981';
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.10)';
+        }
 
-      <!-- Driving lane markings -->
-      <line x1="50" y1="230" x2="590" y2="230" stroke="#eab308" stroke-width="2" stroke-dasharray="10,8"/>
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
 
-      <text x="45" y="24" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold">
-        PARKSIGHT CCTV CAM-04 &bull; NORTH DECK &bull; 640x360x3 &bull; ${type.toUpperCase()}
-      </text>
-    </svg>`;
+        // Compact readable tag for occupied or indeterminate slots
+        if (box.isOccupied || isUnknown) {
+          const shortTag = box.isOccupied
+            ? `${box.bayId || 'OBJ'} OCC`
+            : `${box.bayId || 'BAY'} LOW`;
+          const tagColor = box.isOccupied ? '#e11d48' : '#ca8a04';
+          ctx.font = 'bold 9px monospace';
+          const textWidth = ctx.measureText(shortTag).width;
+          const tagY = Math.max(2, y - 13);
+          ctx.fillStyle = tagColor;
+          ctx.fillRect(x, tagY, textWidth + 6, 12);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(shortTag, x + 3, tagY + 9);
+        }
+      });
+    };
 
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
-  };
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const currentImagePayload =
-    inputType === 'upload' && customImage
-      ? customImage
-      : getSampleImageDataUri(selectedSample);
+    if (frameDataUri) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        renderBoxes();
+      };
+      img.onerror = () => {
+        renderBoxes();
+      };
+      img.src = frameDataUri;
+    } else {
+      renderBoxes();
+    }
+  }, []);
+
+  const handleAnalyze = useCallback(async () => {
+    setIsAnalyzing(true);
+    setPropagationNotice(null);
+    try {
+      const framePayload =
+        inputType === 'upload' && customImage
+          ? customImage
+          : renderPresetFramePngDataUri(selectedSample);
+      const presetHint = inputType === 'sample' ? selectedSample : undefined;
+
+      const result = await analyzeDetectionImage(
+        activeEngine,
+        framePayload,
+        runGeminiAssessment,
+        yoloEndpoint,
+        presetHint
+      );
+      setDetectionResult(result);
+      drawDetectionsOnCanvas(result, framePayload);
+    } catch (err) {
+      console.error('Detection analysis error:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [activeEngine, customImage, drawDetectionsOnCanvas, inputType, runGeminiAssessment, selectedSample, yoloEndpoint]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,25 +297,6 @@ export const AIDetectionView: React.FC = () => {
         setInputType('upload');
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAnalyze = async () => {
-    setIsAnalyzing(true);
-    setPropagationNotice(null);
-    try {
-      const result = await analyzeDetectionImage(
-        activeEngine,
-        currentImagePayload,
-        runGeminiAssessment,
-        yoloEndpoint
-      );
-      setDetectionResult(result);
-      drawDetectionsOnCanvas(result);
-    } catch (err) {
-      console.error('Detection analysis error:', err);
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
@@ -130,13 +312,9 @@ export const AIDetectionView: React.FC = () => {
         detectionResult.statusLabel ||
         (sourceToUse === 'YOLO_REAL' ? 'Real YOLO Inference' : 'Simulation Fallback');
 
-      await propagateRealDetections(
-        detectionResult.detections,
-        sourceToUse,
-        labelToUse
-      );
+      await propagateRealDetections(detectionResult.detections, sourceToUse, labelToUse);
       setPropagationNotice(
-        `Successfully propagated ${detectionResult.occupiedCount} occupied and ${detectionResult.availableCount} available spaces to live dashboard, alerts & recommendations! Source: [${sourceToUse}]`
+        `Propagated ${detectionResult.occupiedCount} occupied and ${detectionResult.availableCount} available bays to live dashboard, alerts & recommendations (Source: [${sourceToUse}]).`
       );
     } catch (err) {
       console.error('Propagation failed:', err);
@@ -145,66 +323,14 @@ export const AIDetectionView: React.FC = () => {
 
   useEffect(() => {
     handleAnalyze();
-  }, [activeEngine, inputType, selectedSample]);
-
-  // Draw overlay onto canvas
-  const drawDetectionsOnCanvas = (result: DetectionResult) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Dark backdrop
-    ctx.fillStyle = '#090d16';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const scaleX = canvas.width / 100;
-    const scaleY = canvas.height / 100;
-
-    // Draw bays and detected vehicles
-    result.detections.forEach((box) => {
-      const x = box.x * scaleX;
-      const y = box.y * scaleY;
-      const w = box.width * scaleX;
-      const h = box.height * scaleY;
-
-      ctx.lineWidth = 1.8;
-
-      if (box.isOccupied) {
-        ctx.strokeStyle = '#f43f5e';
-        ctx.fillStyle = 'rgba(244, 63, 94, 0.18)';
-      } else if (box.label.includes('Unknown') || box.label.includes('Low Confidence')) {
-        ctx.strokeStyle = '#eab308';
-        ctx.fillStyle = 'rgba(234, 179, 8, 0.15)';
-      } else {
-        ctx.strokeStyle = '#10b981';
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
-      }
-
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeRect(x, y, w, h);
-
-      // Label tag
-      const tagColor = box.isOccupied ? '#f43f5e' : box.label.includes('Unknown') ? '#eab308' : '#10b981';
-      ctx.fillStyle = tagColor;
-      ctx.font = '10px monospace';
-      const label = box.label;
-      const textWidth = ctx.measureText(label).width;
-      ctx.fillRect(x, Math.max(0, y - 14), textWidth + 8, 14);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(label, x + 4, Math.max(10, y - 3));
-    });
-  };
+  }, [activeEngine, inputType, selectedSample, customImage]);
 
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: WORKSPACE HEADER & HONEST STATUS */}
       <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ScanEye className="w-5 h-5 text-cyan-400" />
             <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
               Computer Vision &amp; Parking Occupancy Engine
@@ -230,7 +356,7 @@ export const AIDetectionView: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Real computer vision pipeline: image ingest, pre-processing, vehicle detection, spatial bay IoU polygon matching, and temporal state propagation.
+            6-stage computer vision pipeline: PNG frame ingest, pre-processing, vehicle detection, spatial bay IoU polygon matching, and temporal state propagation.
           </p>
         </div>
 
@@ -298,7 +424,7 @@ export const AIDetectionView: React.FC = () => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             className="hidden"
           />
 
@@ -320,7 +446,7 @@ export const AIDetectionView: React.FC = () => {
           {inputType === 'upload' && customImage && (
             <div className="p-2 rounded-xl bg-slate-950 text-emerald-400 flex items-center gap-2 text-[11px]">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Genuine image payload loaded</span>
+              <span className="truncate">Genuine raster image payload loaded</span>
             </div>
           )}
         </div>
@@ -340,16 +466,16 @@ export const AIDetectionView: React.FC = () => {
                 className="w-full bg-slate-950 text-slate-200 rounded-xl px-3 py-1.5 border border-slate-800 font-mono text-[11px]"
               />
               <p className="text-[10px] text-slate-500">
-                Sends full un-truncated base64 JSON payload. Will fall back safely to edge analyzer if offline.
+                Sends full base64 PNG/JPEG payload. Reports honest simulated fallback when external YOLO service is offline.
               </p>
             </div>
           ) : (
             <div className="space-y-1.5 text-slate-300">
               <p className="text-[11px] text-slate-400">
-                Deterministic Synthetic Computer Vision: Calculates bay vacancy via polygon intersection (IoU) with campus deck telemetry.
+                Deterministic Synthetic Computer Vision: Calculates bay vacancy via geometric polygon intersection (IoU) on North Deck Rows A &amp; B.
               </p>
               <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300">
-                IoU Threshold: &ge; 0.45 Occupied &bull; &le; 0.20 Available
+                IoU Threshold: &ge; 0.45 Occupied &bull; &le; 0.15 Available
               </div>
             </div>
           )}
@@ -374,7 +500,7 @@ export const AIDetectionView: React.FC = () => {
               3. Execution &amp; Pipeline Propagation
             </span>
             <p className="text-slate-400 text-[11px]">
-              Execute computer vision frame extraction, bounding box inference, and optionally propagate directly to the live parking state.
+              Execute computer vision frame extraction, bounding box IoU evaluation, and optionally propagate directly to the live parking store.
             </p>
           </div>
 
@@ -423,44 +549,74 @@ export const AIDetectionView: React.FC = () => {
 
       {/* SECTION 3 & 4: DETECTION VISUAL OVERLAY & RESULTS SUMMARY */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Detection Canvas (2 cols) */}
-        <div className="lg:col-span-2 rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-cyan-400" />
-              <span className="font-bold text-white">Detection &amp; Spatial IoU Overlay</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
-                640x360 RESOLUTION
+        {/* Detection Canvas + Pipeline Trace (2 cols) */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-cyan-400" />
+                <span className="font-bold text-white">Detection &amp; Spatial IoU Overlay</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                  640x360 PNG TENSOR
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono tabular-nums">
+                Latency: {detectionResult?.processingTimeMs || 0}ms
               </span>
             </div>
-            <span className="text-[11px] text-slate-400 font-mono">
-              Latency: {detectionResult?.processingTimeMs || 0}ms
-            </span>
-          </div>
 
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={360}
-              className="w-full h-full object-contain"
-            />
-          </div>
+            <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
+              <canvas
+                ref={canvasRef}
+                width={640}
+                height={360}
+                className="w-full h-full object-contain"
+              />
+            </div>
 
-          <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1 text-rose-400">
-                <span className="w-2.5 h-2.5 rounded bg-rose-500/20 border border-rose-500" /> Occupied Vehicle
-              </span>
-              <span className="flex items-center gap-1 text-emerald-400">
-                <span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500" /> Vacant Stall
-              </span>
-              <span className="flex items-center gap-1 text-amber-400">
-                <span className="w-2.5 h-2.5 rounded bg-amber-500/20 border border-amber-500" /> Low Confidence / Unknown
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex items-center gap-1 text-rose-400">
+                  <span className="w-2.5 h-2.5 rounded bg-rose-500/20 border border-rose-500" /> Occupied (&ge;0.45 IoU)
+                </span>
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500" /> Vacant (&le;0.15 IoU)
+                </span>
+                <span className="flex items-center gap-1 text-amber-400">
+                  <span className="w-2.5 h-2.5 rounded bg-amber-500/20 border border-amber-500" /> Indeterminate (0.15–0.45 IoU)
+                </span>
+              </div>
+              <span className="font-mono tabular-nums">
+                Frame Sync: {detectionResult ? new Date(detectionResult.timestamp).toLocaleTimeString() : '--:--:--'}
               </span>
             </div>
-            <span className="font-mono">Timestamp: {new Date().toLocaleTimeString()}</span>
           </div>
+
+          {/* 6-Stage Execution Trace */}
+          {detectionResult?.pipelineStages && detectionResult.pipelineStages.length > 0 && (
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-200 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>6-Stage Pipeline Execution Trace</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-400 tabular-nums">
+                  Source Tag: [{detectionResult.source}]
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {detectionResult.pipelineStages.map((st, idx) => (
+                  <div key={idx} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-200 text-[11px]">{st.stage}</span>
+                      <span className="text-[10px] font-mono text-emerald-400 tabular-nums">{st.durationMs}ms</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">{st.details}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Results & Gemini Multimodal Audit (1 col) */}
@@ -476,19 +632,19 @@ export const AIDetectionView: React.FC = () => {
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Occupied</span>
-                    <span className="text-lg font-bold text-rose-400 font-mono">
+                    <span className="text-lg font-bold text-rose-400 font-mono tabular-nums">
                       {detectionResult.occupiedCount}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Available</span>
-                    <span className="text-lg font-bold text-emerald-400 font-mono">
+                    <span className="text-lg font-bold text-emerald-400 font-mono tabular-nums">
                       {detectionResult.availableCount}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Indeterminate</span>
-                    <span className="text-lg font-bold text-amber-400 font-mono">
+                    <span className="text-lg font-bold text-amber-400 font-mono tabular-nums">
                       {detectionResult.unknownCount || 0}
                     </span>
                   </div>
@@ -518,26 +674,38 @@ export const AIDetectionView: React.FC = () => {
             {detectionResult?.geminiSceneAnalysis ? (
               <div className="space-y-2 text-slate-300">
                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Lighting:</span>
-                    <span className="text-slate-200 font-medium">{detectionResult.geminiSceneAnalysis.lighting}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-400 shrink-0">Lighting:</span>
+                    <span className="text-slate-200 font-medium text-right">{detectionResult.geminiSceneAnalysis.lighting}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Surface / Weather:</span>
-                    <span className="text-slate-200 font-medium">{detectionResult.geminiSceneAnalysis.weather}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-400 shrink-0">Surface / Weather:</span>
+                    <span className="text-slate-200 font-medium text-right">{detectionResult.geminiSceneAnalysis.weather}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Obstructions:</span>
-                    <span className="text-slate-200 font-medium">{detectionResult.geminiSceneAnalysis.obstructions}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-400 shrink-0">Obstructions:</span>
+                    <span className="text-slate-200 font-medium text-right">{detectionResult.geminiSceneAnalysis.obstructions}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-slate-900">
                     <span className="text-slate-400">CV Reliability:</span>
-                    <span className="text-emerald-400 font-bold">{detectionResult.geminiSceneAnalysis.detectionReliability}</span>
+                    <span
+                      className={`font-bold ${
+                        detectionResult.geminiSceneAnalysis.detectionReliability === 'High'
+                          ? 'text-emerald-400'
+                          : detectionResult.geminiSceneAnalysis.detectionReliability === 'Moderate'
+                          ? 'text-amber-400'
+                          : 'text-rose-400'
+                      }`}
+                    >
+                      {detectionResult.geminiSceneAnalysis.detectionReliability}
+                    </span>
                   </div>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-cyan-950/30 border border-cyan-800/40 text-[11px] text-cyan-200">
-                  <strong className="block text-cyan-300 mb-0.5">Multimodal Notes:</strong>
+                  <strong className="block text-cyan-300 mb-0.5">
+                    Multimodal Notes {detectionResult.geminiSceneAnalysis.simulated ? '(Local Fallback)' : '(Live Gemini API)'}:
+                  </strong>
                   {detectionResult.geminiSceneAnalysis.notes}
                 </div>
               </div>

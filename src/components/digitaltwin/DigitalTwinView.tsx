@@ -25,7 +25,7 @@ import { useParking } from '../../context/ParkingContext';
 
 export const DigitalTwinView: React.FC = () => {
   const { simulation, bays, recentEvents, openFeedbackModal } = useParking();
-  const [seedInput, setSeedInput] = useState<string>('42');
+  const [seedInput, setSeedInput] = useState<string>(String(simulation.seed ?? 42));
 
   const temporalCounts = React.useMemo(() => {
     let confAvail = 0;
@@ -49,8 +49,9 @@ export const DigitalTwinView: React.FC = () => {
       const total = secBays.length || 24;
       const occupied = secBays.filter((b) => b.status === 'occupied').length;
       const available = secBays.filter((b) => b.status === 'available').length;
+      const nonParkable = secBays.filter((b) => b.status === 'reserved' || b.status === 'maintenance').length;
       const saturation = Math.round((occupied / total) * 100);
-      return { name, total, occupied, available, saturation };
+      return { name, total, occupied, available, nonParkable, saturation };
     });
   }, [bays]);
 
@@ -119,31 +120,68 @@ export const DigitalTwinView: React.FC = () => {
         </div>
       </div>
 
-      {/* DETERMINISTIC TEST SCENARIOS (Review 2 Requirement 6) */}
+      {/* DETERMINISTIC TEST SCENARIOS & PRNG SEED */}
       <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-cyan-400" />
-            <span>Deterministic Scenario Presets</span>
-          </h2>
-          <span className="text-[10px] text-slate-400 font-mono">REPRODUCIBLE TESTING</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-cyan-400" />
+              <span>Deterministic Scenario Presets &amp; Mulberry32 PRNG Seed</span>
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed mt-1">
+              Select any benchmark scenario or apply a deterministic seed to reproduce arrival surges, departure waves, or sensor interruptions:
+            </p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (seedInput.trim()) {
+                simulation.reseed(seedInput.trim());
+              }
+            }}
+            className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 self-start sm:self-auto"
+          >
+            <label htmlFor="prng-seed-input" className="text-[11px] font-mono text-slate-400 pl-1.5">
+              Seed ({simulation.seed}):
+            </label>
+            <input
+              id="prng-seed-input"
+              type="text"
+              value={seedInput}
+              onChange={(e) => setSeedInput(e.target.value)}
+              placeholder="e.g. 42"
+              className="w-24 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-cyan-500"
+            />
+            <button
+              type="submit"
+              className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Apply Seed</span>
+            </button>
+          </form>
         </div>
-        <p className="text-xs text-slate-400 leading-relaxed">
-          Select any benchmark scenario to evaluate system response under arrival surges, departure waves, or sensor interruptions:
-        </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1 text-xs">
           <button
             onClick={() => simulation.setScenario('morning_rush')}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-950 hover:border-cyan-500/50 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'morning_rush'
+                ? 'border-cyan-400 bg-cyan-950/30 ring-1 ring-cyan-500/40'
+                : 'border-slate-800 bg-slate-950 hover:border-cyan-500/50'
+            }`}
           >
             <div className="font-bold text-cyan-300">Morning Rush</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">High arrival influx (&sim;76%)</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">High arrival influx (~76%)</div>
           </button>
 
           <button
             onClick={() => simulation.setScenario('midday_turnover')}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-950 hover:border-cyan-500/50 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'midday_turnover'
+                ? 'border-emerald-400 bg-emerald-950/30 ring-1 ring-emerald-500/40'
+                : 'border-slate-800 bg-slate-950 hover:border-cyan-500/50'
+            }`}
           >
             <div className="font-bold text-emerald-300">Midday Turnover</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Balanced flow equilibrium</div>
@@ -151,7 +189,11 @@ export const DigitalTwinView: React.FC = () => {
 
           <button
             onClick={() => simulation.setScenario('evening_exodus')}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-950 hover:border-cyan-500/50 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'evening_exodus'
+                ? 'border-amber-400 bg-amber-950/30 ring-1 ring-amber-500/40'
+                : 'border-slate-800 bg-slate-950 hover:border-cyan-500/50'
+            }`}
           >
             <div className="font-bold text-amber-300">Evening Exodus</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Mass departure wave</div>
@@ -159,7 +201,11 @@ export const DigitalTwinView: React.FC = () => {
 
           <button
             onClick={() => simulation.setScenario('night_lull')}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-950 hover:border-cyan-500/50 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'night_lull'
+                ? 'border-purple-400 bg-purple-950/30 ring-1 ring-purple-500/40'
+                : 'border-slate-800 bg-slate-950 hover:border-cyan-500/50'
+            }`}
           >
             <div className="font-bold text-purple-300">Night Lull</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Minimal traffic &lt;20%</div>
@@ -167,7 +213,11 @@ export const DigitalTwinView: React.FC = () => {
 
           <button
             onClick={() => simulation.setScenario('camera_failure')}
-            className="p-2.5 rounded-xl border border-rose-900/50 bg-rose-950/20 hover:border-rose-500 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'camera_failure'
+                ? 'border-rose-400 bg-rose-950/40 ring-1 ring-rose-500/40'
+                : 'border-rose-900/50 bg-rose-950/20 hover:border-rose-500'
+            }`}
           >
             <div className="font-bold text-rose-300">Camera Failure</div>
             <div className="text-[10px] text-slate-400 mt-0.5">Drop RTSP heartbeat</div>
@@ -175,7 +225,11 @@ export const DigitalTwinView: React.FC = () => {
 
           <button
             onClick={() => simulation.setScenario('unusual_spike')}
-            className="p-2.5 rounded-xl border border-amber-900/50 bg-amber-950/20 hover:border-amber-500 text-left transition-all"
+            className={`p-2.5 rounded-xl border text-left transition-all ${
+              simulation.scenarioPreset === 'unusual_spike'
+                ? 'border-amber-400 bg-amber-950/40 ring-1 ring-amber-500/40'
+                : 'border-amber-900/50 bg-amber-950/20 hover:border-amber-500'
+            }`}
           >
             <div className="font-bold text-amber-300">Unusual Spike</div>
             <div className="text-[10px] text-slate-400 mt-0.5">&gt;15% sudden surge alert</div>
@@ -327,9 +381,11 @@ export const DigitalTwinView: React.FC = () => {
                     style={{ width: `${sec.saturation}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
+                <div className="flex justify-between text-[11px] text-slate-400 tabular-nums">
                   <span className="text-emerald-400">{sec.available} Vacant</span>
-                  <span>{sec.occupied} Occupied / {sec.total} Total</span>
+                  <span>
+                    {sec.occupied} Occupied{sec.nonParkable > 0 ? ` · ${sec.nonParkable} Res/Maint` : ''} / {sec.total} Total
+                  </span>
                 </div>
               </div>
             ))}

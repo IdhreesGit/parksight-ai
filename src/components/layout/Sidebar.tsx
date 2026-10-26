@@ -47,8 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: NavItem[] = [
     { id: 'dashboard', labelKey: 'nav.dashboard', defaultLabel: 'Dashboard', icon: LayoutDashboard },
     { id: 'parking', labelKey: 'nav.parking', defaultLabel: 'Live Parking Map', icon: MapPin },
-    { id: 'navigation', labelKey: 'nav.navigation', defaultLabel: 'Indoor Navigation', icon: Compass, badge: 'Interactive', badgeColor: 'bg-blue-500/15 text-blue-300 border border-blue-500/30' },
-    { id: 'detection', labelKey: 'nav.detection', defaultLabel: 'CV Workspace', icon: ScanEye, badge: systemMode === 'REAL' ? 'Real CV' : 'YOLOv8', badgeColor: systemMode === 'REAL' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' },
+    { id: 'navigation', labelKey: 'nav.navigation', defaultLabel: 'Indoor Navigation', icon: Compass },
+    { id: 'detection', labelKey: 'nav.detection', defaultLabel: 'CV Workspace', icon: ScanEye, badge: systemMode === 'REAL' ? 'Real CV' : 'Sim Fallback', badgeColor: systemMode === 'REAL' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border border-amber-500/30' },
     { id: 'recommendations', labelKey: 'nav.recommendations', defaultLabel: 'Recommendations', icon: Sparkles },
     { id: 'digital-twin', labelKey: 'nav.digitalTwin', defaultLabel: 'Digital Twin Sim', icon: Cpu },
     { id: 'analytics', labelKey: 'nav.analytics', defaultLabel: 'Predictive Analytics', icon: LineChart },
@@ -153,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <div className="text-[11px] text-slate-400 flex items-center justify-between mt-1">
           <span>Review Stage:</span>
-          <span className="text-emerald-400 font-mono text-[10px]">Review 2 Prep</span>
+          <span className="text-emerald-400 font-mono text-[10px]">Review 3 (C29)</span>
         </div>
       </div>
     </div>

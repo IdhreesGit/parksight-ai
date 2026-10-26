@@ -1,6 +1,6 @@
 /**
  * ParkSight AI - TypeScript Domain Types & Interfaces
- * Phase 2 Enterprise Academic Prototype Domain Model
+ * Review 3 Enterprise Academic Prototype Domain Model
  */
 
 export type BayStatus = 'available' | 'occupied' | 'reserved' | 'maintenance' | 'unknown' | 'low_confidence';
@@ -376,4 +376,6 @@ export interface StatisticalPrediction {
     upperPercent: number;
   };
   forecastSeries?: Array<{ minuteOffset: number; predictedPercent: number; lower: number; upper: number }>;
+  alpha?: number;
+  beta?: number;
 }

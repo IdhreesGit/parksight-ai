@@ -68,8 +68,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, onNavigate }
                 <span className="font-extrabold text-base tracking-tight text-white group-hover:text-cyan-400 transition-colors">
                   ParkSight<span className="text-cyan-400">AI</span>
                 </span>
-                <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono">
-                  Review 2
+                <span className="hidden sm:inline-block text-[10px] font-medium text-cyan-400 font-mono">
+                  &bull; Review 3
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 tracking-wider uppercase font-medium hidden sm:block">
@@ -255,8 +255,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, onNavigate }
               PS
             </div>
             <div className="text-left hidden lg:block">
-              <div className="text-xs font-semibold text-white leading-tight">Review 2 Evaluator</div>
-              <div className="text-[10px] text-slate-400">Computer Vision &amp; AI</div>
+              <div className="text-xs font-semibold text-white leading-tight">Review 3 Evaluator</div>
+              <div className="text-[10px] text-slate-400">RTC Coimbatore &bull; C29</div>
             </div>
           </div>
         </div>

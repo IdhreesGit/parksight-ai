@@ -15,7 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useParking } from '../../context/ParkingContext';
-import { FACILITY_ENTRANCES } from '../../services/navigationService';
+import { FACILITY_ENTRANCES, calculateEntranceDistanceMeters } from '../../services/navigationService';
 import { ParkingBay } from '../../types';
 
 interface NavigationViewProps {
@@ -67,7 +67,7 @@ export const NavigationView: React.FC<NavigationViewProps> = ({ onSelectBay, onN
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-cyan-400" />
             <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Indoor Parking Navigation (Review 2 Simulation)
+              Indoor Parking Navigation (Review 3 Simulation)
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">
               PROTOTYPE INDOOR ROUTING
@@ -127,7 +127,7 @@ export const NavigationView: React.FC<NavigationViewProps> = ({ onSelectBay, onN
             >
               {availableBays.map((b) => (
                 <option key={b.id} value={b.id}>
-                  Bay {b.id} &bull; {b.section} &bull; Level {b.level} &bull; {b.type.toUpperCase()} ({b.distanceToEntranceMeters}m walk)
+                  Bay {b.id} &bull; {b.section} &bull; Level {b.level} &bull; {b.type.toUpperCase()} ({calculateEntranceDistanceMeters(b, selectedEntrance)}m walk)
                 </option>
               ))}
             </select>
@@ -160,13 +160,13 @@ export const NavigationView: React.FC<NavigationViewProps> = ({ onSelectBay, onN
               </span>
             </div>
             <div className="flex items-center gap-4 text-slate-400 text-xs">
-              <span className="flex items-center gap-1 font-mono text-emerald-400 font-semibold">
+              <span className="flex items-center gap-1 font-mono text-emerald-400 font-semibold tabular-nums">
                 <Footprints className="w-3.5 h-3.5" />
-                {activeNavigationRoute?.totalDistanceMeters || activeBay?.distanceToEntranceMeters || 35} meters
+                {activeNavigationRoute?.totalDistanceMeters ?? activeBay?.distanceToEntranceMeters ?? 35} meters
               </span>
-              <span className="flex items-center gap-1 font-mono text-cyan-400 font-semibold">
+              <span className="flex items-center gap-1 font-mono text-cyan-400 font-semibold tabular-nums">
                 <Clock className="w-3.5 h-3.5" />
-                ~{activeNavigationRoute?.estimatedWalkingMinutes || activeBay?.estimatedWalkingMinutes || 1.0} min walk
+                ~{activeNavigationRoute?.estimatedWalkingMinutes ?? activeBay?.estimatedWalkingMinutes ?? 1.0} min walk
               </span>
             </div>
           </div>
@@ -186,7 +186,6 @@ export const NavigationView: React.FC<NavigationViewProps> = ({ onSelectBay, onN
               {/* Bay rectangles on Level 1 or 2 */}
               {bays
                 .filter((b) => b.level === (activeBay?.level || 1))
-                .slice(0, 36)
                 .map((b) => {
                   const isDestination = activeBay?.id === b.id;
                   const isOccupied = b.status === 'occupied';

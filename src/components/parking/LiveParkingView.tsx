@@ -40,6 +40,7 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
   const {
     bays,
     selectedLot,
+    setSelectedLotId,
     openFeedbackModal,
     refreshData,
     recommendations,
@@ -117,7 +118,7 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-cyan-400" />
             <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Interactive 2D Parking Map (Review 2)
+              Interactive 2D Parking Map (Review 3)
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">
               {selectedLot?.name || 'Campus Parking Structure'}
@@ -195,6 +196,7 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
             <option value="North Deck">North Deck</option>
             <option value="South Wing">South Wing</option>
             <option value="East Courtyard">East Courtyard</option>
+            <option value="West Deck">West Deck</option>
           </select>
 
           <div className="relative">
@@ -274,6 +276,46 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
               </span>
             </div>
           </div>
+
+          {selectedLot && selectedLot.id !== 'campus-deck' && (
+            <div className="mb-4 p-4 rounded-xl bg-amber-950/30 border border-amber-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div>
+                <div className="font-semibold text-amber-200">
+                  Aggregate Zone Telemetry Only — {selectedLot.name}
+                </div>
+                <p className="text-slate-300 mt-0.5">
+                  {selectedLot.availableBays} available / {selectedLot.occupiedBays} occupied / {selectedLot.reservedBays + selectedLot.maintenanceBays} reserved &amp; maint ({selectedLot.totalBays} total bays). Per-bay CV &amp; Digital Twin floorplan geometry is instrumented on Campus Parking Structure.
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedLotId('campus-deck')}
+                className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold shrink-0 transition-colors"
+              >
+                Switch to Campus Parking Structure
+              </button>
+            </div>
+          )}
+
+          {showNavigationPath && activeNavigationRoute && waypoints.length > 0 && (
+            <div className="mb-4 p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-blue-200">
+                <Footprints className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>
+                  Active Guidance: <strong>{activeNavigationRoute.entrance}</strong> &rarr;{' '}
+                  <strong className="font-mono">Bay {activeNavigationRoute.destinationBayId}</strong> ({activeNavigationRoute.totalDistanceMeters}m &bull; ~{activeNavigationRoute.estimatedWalkingMinutes} min walk)
+                </span>
+              </div>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate('navigation')}
+                  className="text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 flex items-center gap-1"
+                >
+                  <span>Turn-by-Turn Steps</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* SVG Vector Interactive Layout with Navigation Path */}
           <div
@@ -368,6 +410,10 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
                             <div className="w-full h-7 rounded-lg flex items-center justify-center bg-slate-950/50 border border-slate-800/60 my-1">
                               {bay.status === 'occupied' ? (
                                 <Car className="w-4 h-4 text-slate-500" />
+                              ) : bay.status === 'reserved' ? (
+                                <span className="text-[9px] font-mono text-amber-400 font-semibold">RESERVED</span>
+                              ) : bay.status === 'maintenance' ? (
+                                <span className="text-[9px] font-mono text-slate-500 font-semibold">MAINT</span>
                               ) : isLowConfidence ? (
                                 <span className="text-[9px] font-mono text-amber-400 font-semibold">UNKNOWN</span>
                               ) : (
@@ -477,7 +523,9 @@ export const LiveParkingView: React.FC<LiveParkingViewProps> = ({
                     {selectedBay.type === 'accessible' && <Accessibility className="w-3.5 h-3.5 text-indigo-400" />}
                     <span className="capitalize">{selectedBay.type}</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 block">Ground Level Ingress</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    {selectedBay.level === 1 ? 'Ground Level Ingress' : 'Upper Deck Ramp Ingress'}
+                  </span>
                 </div>
               </div>
 

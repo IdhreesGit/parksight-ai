@@ -1,16 +1,18 @@
 /**
- * ParkSight AI - Comprehensive Verification Test Suite (Review 2 Specification)
+ * ParkSight AI - Comprehensive Verification Test Suite (Review 3 Specification)
  * Exercises:
  * 1. Occupancy calculation & percentage aggregation
  * 2. Parking bay state transitions & 3-frame temporal hysteresis
  * 3. Recommendation scoring & hard constraints (ADA, EV, Max Walking Distance)
  * 4. Unavailable spaces rejection
- * 5. Invalid parking bay handling
+ * 5. Indoor navigation route waypoint generation
  * 6. Duplicate events and buffer truncation
- * 7. Low confidence detection & indeterminate thresholding
+ * 7. Spatial IoU overlap & low-confidence boundaries
  * 8. Prediction input & Holt double exponential smoothing
- * 9. Computer Vision IoU polygon overlap logic
- * 10. Human feedback storage & recommendation feedback loop
+ * 9. Seedable Mulberry32 PRNG determinism
+ * 10. Computer Vision 6-stage pipeline
+ * 11. Technical integrity & honest fallback verification
+ * 12. Review 3 multi-lot math, 4x24 section symmetry, reset protection, entrance routing & Gemini MIME checks
  */
 
 import { createPRNG } from '../server/prng';
@@ -18,8 +20,11 @@ import { calculateBayRecommendations } from '../services/recommendationEngine';
 import { calculateStatisticalPrediction } from '../server/predictionService';
 import { LocalDeterministicYoloAdapter, IYoloServiceAdapter, YoloDetectionInput, YoloDetectionOutput } from '../services/yoloAdapter';
 import { SimulationDetectionEngine, TechnicalCVPipelineEngine, calculateBoxBayIoU } from '../services/detectionEngine';
-import { generateNavigationRoute } from '../services/navigationService';
-import { propagateRealDetectionsToStore, parkingBays, parkingEvents } from '../server/parkingStore';
+import { generateNavigationRoute, calculateEntranceDistanceMeters } from '../services/navigationService';
+import { propagateRealDetectionsToStore, parkingBays, parkingEvents, parkingLots, syncLotStats } from '../server/parkingStore';
+import { INITIAL_LOTS, generateCampusBays } from '../data/seedData';
+import { resetSimulation } from '../server/simulationService';
+import { inspectParkingSceneWithGemini } from '../server/geminiService';
 import { ParkingBay, UserPreferences, SimulationHistorySnapshot, BoundingBox } from '../types';
 
 let passed = 0;
@@ -469,6 +474,164 @@ assert(evalDetection?.class === 'vacant_bay', 'Test 11.5c: Zero detections yield
 assert(zeroResult.occupiedCount === 0, 'Test 11.5d: occupiedCount is 0 (zero false positive retention)');
 
 // =============================================================
+// Suite 12: Review 3 Functional & Architectural Verification
+// =============================================================
+console.log('\n[Suite 12] Review 3 Multi-Lot Math, Section Symmetry, Reset & Routing');
+
+// 12.1 Multi-lot capacity accounting: available + occupied + reserved + maintenance === totalBays
+for (const lot of INITIAL_LOTS) {
+  const sum = lot.availableBays + lot.occupiedBays + lot.reservedBays + lot.maintenanceBays;
+  assert(
+    sum === lot.totalBays,
+    `Test 12.1 (${lot.id}): Seed lot accounting ${lot.availableBays}+${lot.occupiedBays}+${lot.reservedBays}+${lot.maintenanceBays} === ${lot.totalBays}`
+  );
+}
+
+// 12.2 4-section x 24-bay structural symmetry & unique bay IDs
+const freshSeedBays = generateCampusBays();
+const uniqueIds = new Set(freshSeedBays.map((b) => b.id));
+assert(freshSeedBays.length === 96 && uniqueIds.size === 96, 'Test 12.2a: Seed generates 96 unique parking bays');
+for (const secName of ['North Deck', 'South Wing', 'East Courtyard', 'West Deck']) {
+  const secCount = freshSeedBays.filter((b) => b.section === secName).length;
+  assert(secCount === 24, `Test 12.2b: Section "${secName}" has exactly 24 bays (got ${secCount})`);
+}
+
+// 12.3 Simulation reset preserves reserved & maintenance bays and exact lot totals
+resetSimulation();
+syncLotStats();
+const maintAfterReset = parkingBays.filter((b) => b.status === 'maintenance');
+const resAfterReset = parkingBays.filter((b) => b.status === 'reserved');
+const availAfterReset = parkingBays.filter((b) => b.status === 'available');
+const occAfterReset = parkingBays.filter((b) => b.status === 'occupied');
+assert(maintAfterReset.length >= 1, 'Test 12.3a: resetSimulation preserves maintenance bay(s)');
+assert(resAfterReset.length >= 1, 'Test 12.3b: resetSimulation preserves reserved bay(s)');
+assert(
+  availAfterReset.length + occAfterReset.length + resAfterReset.length + maintAfterReset.length === parkingBays.length,
+  'Test 12.3c: Post-reset stall statuses partition all 96 bays with zero drift'
+);
+const campusLot = parkingLots.find((l) => l.id === 'campus-deck')!;
+assert(
+  campusLot.availableBays + campusLot.occupiedBays + campusLot.reservedBays + campusLot.maintenanceBays === campusLot.totalBays,
+  'Test 12.3d: Synced campus-deck lot stats sum to 96'
+);
+
+// 12.4 Maintenance bay protection from automated CV overwrite vs manual dispute override
+const maintBay = maintAfterReset[0];
+propagateRealDetectionsToStore(
+  [{
+    x: maintBay.x,
+    y: maintBay.y,
+    width: maintBay.width,
+    height: maintBay.height,
+    label: 'Vacant',
+    confidence: 0.99,
+    bayId: maintBay.id,
+    isOccupied: false,
+    class: 'vacant_bay',
+    source: 'YOLO_REAL',
+    simulated: false,
+  }],
+  'YOLO_REAL',
+  'Real YOLO Inference'
+);
+assert(maintBay.status === 'maintenance', 'Test 12.4: Automated CV propagation does not overwrite maintenance bay status');
+
+// 12.5 Entrance-aware walking distance & recommendation ranking shift
+const westSideBay: ParkingBay = {
+  id: 'W-BAY',
+  lotId: 'campus-deck',
+  section: 'North Deck',
+  row: 'A',
+  level: 1,
+  type: 'standard',
+  status: 'available',
+  distanceToEntranceMeters: 22,
+  estimatedWalkingMinutes: 0.5,
+  lastUpdated: new Date().toISOString(),
+  x: 10,
+  y: 10,
+  width: 6,
+  height: 12,
+};
+const eastSideBay: ParkingBay = {
+  id: 'E-BAY',
+  lotId: 'campus-deck',
+  section: 'North Deck',
+  row: 'B',
+  level: 1,
+  type: 'standard',
+  status: 'available',
+  distanceToEntranceMeters: 68,
+  estimatedWalkingMinutes: 1.1,
+  lastUpdated: new Date().toISOString(),
+  x: 86,
+  y: 28,
+  width: 6,
+  height: 12,
+};
+const eastGateDistEastBay = calculateEntranceDistanceMeters(eastSideBay, 'East Walkway');
+const eastGateDistWestBay = calculateEntranceDistanceMeters(westSideBay, 'East Walkway');
+assert(
+  eastGateDistEastBay < eastGateDistWestBay,
+  `Test 12.5a: East-side bay is closer to East Walkway (${eastGateDistEastBay}m < ${eastGateDistWestBay}m)`
+);
+const northGateRec = calculateBayRecommendations([westSideBay, eastSideBay], {
+  ...stdPrefs,
+  preferredEntrance: 'Main Entrance (North)',
+});
+const eastGateRec = calculateBayRecommendations([westSideBay, eastSideBay], {
+  ...stdPrefs,
+  preferredEntrance: 'East Walkway',
+});
+assert(northGateRec.bestMatch?.bay.id === 'W-BAY', 'Test 12.5b: Main Entrance (North) ranks W-BAY #1');
+assert(eastGateRec.bestMatch?.bay.id === 'E-BAY', 'Test 12.5c: Switching to East Walkway re-ranks E-BAY #1');
+
+// 12.6 Holt smoothing alpha sensitivity
+const rampSnapshots: SimulationHistorySnapshot[] = [40, 42, 43, 45, 52, 64, 78, 88].map((occ, idx) => ({
+  tick: idx + 1,
+  timestamp: new Date(Date.now() - (8 - idx) * 120000).toISOString(),
+  simulatedTime: `09:0${idx}`,
+  occupancyPercent: occ,
+  occupiedCount: Math.round((occ / 100) * 96),
+  availableCount: 93 - Math.round((occ / 100) * 96),
+  arrivalsDelta: 4,
+  departuresDelta: 1,
+  turnoverRate: 3.1,
+  searchTimeMin: 2.8,
+}));
+const lowAlphaPred = calculateStatisticalPrediction(rampSnapshots, 88, 96, 20, 0.15);
+const highAlphaPred = calculateStatisticalPrediction(rampSnapshots, 88, 96, 20, 0.80);
+assert(lowAlphaPred.alpha === 0.15 && highAlphaPred.alpha === 0.8, 'Test 12.6a: Prediction preserves requested alpha parameter');
+assert(
+  highAlphaPred.predictedOccupancyPercent !== lowAlphaPred.predictedOccupancyPercent,
+  `Test 12.6b: Alpha smoothing changes forecast responsiveness (${lowAlphaPred.predictedOccupancyPercent}% vs ${highAlphaPred.predictedOccupancyPercent}%)`
+);
+
+// 12.7 Preset sample frames & Gemini MIME validation
+const rainSimResult = await simEngine.analyzeImage('', parkingBays.slice(0, 24), 'sample-rain');
+assert(
+  (rainSimResult.unknownCount ?? 0) >= 1,
+  'Test 12.7a: Wet Pavement Rain preset exercises indeterminate low-confidence IoU zone'
+);
+const svgGeminiRes = await inspectParkingSceneWithGemini('data:image/svg+xml;base64,PHN2Zy8+');
+assert(
+  svgGeminiRes.lighting === 'Format Validation Error' && svgGeminiRes.notes.includes('not supported'),
+  'Test 12.7b: Unsupported SVG payload gracefully returns structured Format Validation Error without throwing'
+);
+const savedGeminiKey = process.env.GEMINI_API_KEY;
+delete process.env.GEMINI_API_KEY;
+const pngGeminiRes = await inspectParkingSceneWithGemini(
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+);
+if (savedGeminiKey !== undefined) {
+  process.env.GEMINI_API_KEY = savedGeminiKey;
+}
+assert(
+  pngGeminiRes.lighting !== 'Format Validation Error',
+  'Test 12.7c: PNG data URI passes MIME validation cleanly'
+);
+
+// =============================================================
 // Summary Report
 // =============================================================
 console.log(`\n==================================================`);
@@ -478,5 +641,6 @@ console.log(`==================================================\n`);
 if (failed > 0) {
   process.exit(1);
 } else {
-  console.log('✓ All Review 2 automated engineering verification checks passed successfully!\n');
+  console.log('✓ All Review 3 automated engineering verification checks passed successfully!\n');
 }
+

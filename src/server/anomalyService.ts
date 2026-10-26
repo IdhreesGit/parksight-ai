@@ -1,11 +1,11 @@
-import { ParkingAlert, AlertType } from '../types';
-import { parkingAlerts, parkingBays } from './parkingStore';
+import type { ParkingAlert, AlertType } from '../types.ts';
+import { parkingAlerts, parkingBays } from './parkingStore.ts';
 
 let lastOccupancyRate: number | null = null;
 let lastCheckTime = Date.now();
 
 /**
- * Rule-Based Anomaly Detection Service (Review 2 Specification)
+ * Rule-Based Anomaly Detection Service (Review 3 Specification)
  * Transparently flagged: Strictly rule-based threshold heuristics.
  *
  * Rules:

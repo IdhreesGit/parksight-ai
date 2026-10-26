@@ -1,4 +1,4 @@
-import { NavigationRoute, NavigationStep, ParkingBay } from '../types';
+import type { NavigationRoute, NavigationStep, ParkingBay } from '../types.ts';
 
 export interface EntranceLocation {
   name: string;
@@ -38,6 +38,27 @@ export const FACILITY_ENTRANCES: Record<string, EntranceLocation> = {
     description: 'Athletics & Express Bus Loop Concourse',
   },
 };
+
+/**
+ * Computes entrance-specific walking distance in meters from any facility gate to a parking bay.
+ * Preserves calibrated baseline bay.distanceToEntranceMeters for Main Entrance (North).
+ */
+export function calculateEntranceDistanceMeters(
+  bay: ParkingBay,
+  entranceName: string = 'Main Entrance (North)'
+): number {
+  if (!entranceName || entranceName === 'Main Entrance (North)' || !FACILITY_ENTRANCES[entranceName]) {
+    return bay.distanceToEntranceMeters || 45;
+  }
+
+  const entrance = FACILITY_ENTRANCES[entranceName];
+  const bayCenterX = bay.x + bay.width / 2;
+  const bayCenterY = bay.y + bay.height / 2;
+  const planarUnits = Math.hypot(bayCenterX - entrance.x, bayCenterY - entrance.y);
+  const levelRampMeters = bay.level > entrance.level ? 45 : 0;
+
+  return Math.max(12, Math.round(12 + planarUnits * 1.25 + levelRampMeters));
+}
 
 /**
  * Calculates a 2D floorplan navigation route from a facility entrance to a target parking bay.
@@ -98,7 +119,7 @@ export function generateNavigationRoute(
     checkpoint: `Bay ${bay.id}`,
   });
 
-  const totalDist = bay.distanceToEntranceMeters || 45;
+  const totalDist = calculateEntranceDistanceMeters(bay, entrance.name);
   const walkingMin = +(totalDist / 65).toFixed(1);
 
   return {

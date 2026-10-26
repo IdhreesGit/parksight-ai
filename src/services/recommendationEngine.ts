@@ -1,14 +1,14 @@
-import {
+import type {
   ParkingBay,
   UserPreferences,
   RecommendationResult,
   RecommendationResponse,
   RecommendationScoreBreakdown,
-} from '../types';
-import { generateNavigationRoute } from './navigationService';
+} from '../types.ts';
+import { generateNavigationRoute, calculateEntranceDistanceMeters } from './navigationService.ts';
 
 /**
- * Transparent Multi-Factor Recommendation Engine (Review 2 Specification)
+ * Transparent Multi-Factor Recommendation Engine (Review 3 Specification)
  * Provides transparent, additive scoring combining:
  * 1. Hard Constraints (Availability, ADA Accessibility, EV Requirement, Walking Distance Limit)
  * 2. Non-Linear Distance Decay relative to target entrance
@@ -67,9 +67,11 @@ export function calculateBayRecommendations(
     }
   }
 
-  // Rule E: Hard Distance Constraint
+  // Rule E: Hard Distance Constraint relative to chosen entrance
   if (isStrict) {
-    const withinDistance = candidates.filter((b) => b.distanceToEntranceMeters <= maxAllowedDist);
+    const withinDistance = candidates.filter(
+      (b) => calculateEntranceDistanceMeters(b, preferences.preferredEntrance) <= maxAllowedDist
+    );
     if (withinDistance.length > 0) {
       candidates = withinDistance;
     }
@@ -105,9 +107,10 @@ export function calculateBayRecommendations(
     // A. Baseline Availability (25 points)
     const availabilityWeight = 25;
 
-    // B. Normalized Non-Linear Distance Decay (up to 25 points)
+    // B. Normalized Non-Linear Distance Decay relative to selected entrance (up to 25 points)
     // S_dist = 25 * max(0, 1 - (d / d_max))^1.1
-    const effectiveDist = bay.distanceToEntranceMeters;
+    const effectiveDist = calculateEntranceDistanceMeters(bay, preferences.preferredEntrance);
+    const effectiveWalkMin = Math.max(0.5, +(effectiveDist / 65).toFixed(1));
     const normDistRatio = Math.min(1, Math.max(0, effectiveDist / maxAllowedDist));
     const distanceWeight = +(25 * Math.pow(1 - normDistRatio, 1.1)).toFixed(1);
 
@@ -180,12 +183,12 @@ export function calculateBayRecommendations(
     const reasons: string[] = [];
     reasons.push('Verified vacant with confirmed multi-frame optical sensor stability.');
 
-    if (bay.distanceToEntranceMeters <= 35) {
+    if (effectiveDist <= 45) {
       reasons.push(
-        `Prime proximity: ${bay.distanceToEntranceMeters}m from ${preferences.preferredEntrance} (~${bay.estimatedWalkingMinutes} min walk).`
+        `Prime proximity: ${effectiveDist}m from ${preferences.preferredEntrance} (~${effectiveWalkMin} min walk).`
       );
     } else {
-      reasons.push(`Walking route: ${bay.distanceToEntranceMeters}m from ${preferences.preferredEntrance}.`);
+      reasons.push(`Walking route: ${effectiveDist}m from ${preferences.preferredEntrance} (~${effectiveWalkMin} min walk).`);
     }
 
     if (sectionOccupancyRatio < 0.6) {

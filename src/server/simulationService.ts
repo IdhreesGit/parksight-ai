@@ -4,10 +4,10 @@ import {
   parkingEvents,
   simulationHistoryBuffer,
   syncLotStats,
-} from './parkingStore';
-import { checkAndGenerateAnomalies, triggerCameraInterruption } from './anomalyService';
-import { createPRNG, PRNG } from './prng';
-import { TemporalState, BayStateHistoryItem, BayStatus } from '../types';
+} from './parkingStore.ts';
+import { checkAndGenerateAnomalies, triggerCameraInterruption } from './anomalyService.ts';
+import { createPRNG, type PRNG } from './prng.ts';
+import type { TemporalState, BayStateHistoryItem, BayStatus } from '../types.ts';
 
 export type SimSpeed = '0.5x' | '1x' | '2x' | '5x';
 export type ScenarioPreset =
@@ -320,7 +320,7 @@ export function performSimulationCycle(): { changedCount: number; eventsGenerate
   ).padStart(2, '0')}`;
   const totalBays = campus.totalBays || 96;
   const currentOccupied = parkingBays.filter((b) => b.status === 'occupied').length;
-  const currentAvailable = totalBays - currentOccupied;
+  const currentAvailable = parkingBays.filter((b) => b.status === 'available').length;
   const occPercent = Math.round((currentOccupied / totalBays) * 100);
   const searchTime = +(2.0 + (occPercent / 100) * 3.8).toFixed(1);
 
@@ -439,26 +439,48 @@ export function resetSimulation() {
   simState.simulatedMinute = 0;
   parkingEvents.length = 0;
 
+  let assignableIdx = 0;
   parkingBays.forEach((bay, index) => {
-    const isOccupied = index % 2 === 0;
-    bay.status = isOccupied ? 'occupied' : 'available';
-    bay.temporalState = isOccupied ? 'confirmed_occupied' : 'confirmed_available';
-    bay.consecutiveHits = 3;
-    bay.requiredHits = 3;
-    bay.confidence = isOccupied ? 0.94 : 0.98;
-    bay.lastUpdated = new Date().toISOString();
+    const nowIso = new Date().toISOString();
 
-    if (isOccupied) {
-      bay.vehicleDetected = {
-        type: bay.type === 'ev' ? 'ev' : 'sedan',
-        color: 'Pearl White',
-        confidence: 0.94,
-        detectedAt: new Date().toISOString(),
-        plateMasked: `SIM-***${(index * 7) % 90 + 10}`,
-        source: 'SIMULATOR',
-      };
-    } else {
+    if (bay.type === 'maintenance') {
+      bay.status = 'maintenance';
+      bay.temporalState = 'confirmed_available';
+      bay.consecutiveHits = 3;
+      bay.requiredHits = 3;
+      bay.confidence = 0.99;
+      bay.lastUpdated = nowIso;
       bay.vehicleDetected = undefined;
+    } else if (bay.type === 'reserved') {
+      bay.status = 'reserved';
+      bay.temporalState = 'confirmed_available';
+      bay.consecutiveHits = 3;
+      bay.requiredHits = 3;
+      bay.confidence = 0.99;
+      bay.lastUpdated = nowIso;
+      bay.vehicleDetected = undefined;
+    } else {
+      const isOccupied = assignableIdx % 2 === 0;
+      assignableIdx++;
+      bay.status = isOccupied ? 'occupied' : 'available';
+      bay.temporalState = isOccupied ? 'confirmed_occupied' : 'confirmed_available';
+      bay.consecutiveHits = 3;
+      bay.requiredHits = 3;
+      bay.confidence = isOccupied ? 0.94 : 0.98;
+      bay.lastUpdated = nowIso;
+
+      if (isOccupied) {
+        bay.vehicleDetected = {
+          type: bay.type === 'ev' ? 'ev' : 'sedan',
+          color: 'Pearl White',
+          confidence: 0.94,
+          detectedAt: nowIso,
+          plateMasked: `SIM-***${((index * 7) % 90) + 10}`,
+          source: 'SIMULATOR',
+        };
+      } else {
+        bay.vehicleDetected = undefined;
+      }
     }
 
     bay.history = [
@@ -466,7 +488,7 @@ export function resetSimulation() {
         status: bay.status,
         temporalState: bay.temporalState,
         consecutiveHits: 3,
-        timestamp: new Date().toISOString(),
+        timestamp: nowIso,
         reason: 'Scenario reset to baseline deterministic state',
         confidence: bay.confidence,
       },

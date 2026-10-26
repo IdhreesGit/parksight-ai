@@ -11,20 +11,20 @@
  * 4. Preserves true source tag (YOLO_REAL vs SIMULATOR).
  */
 
-import { DetectionResult, ParkingBay, BoundingBox, SystemMode, DetectionSourceType } from '../types';
+import type { DetectionResult, ParkingBay, BoundingBox, SystemMode, DetectionSourceType } from '../types.ts';
 import {
-  IYoloServiceAdapter,
   LocalDeterministicYoloAdapter,
   HttpYoloServiceAdapter,
   SyntheticBenchmarkCVAdapter,
-  YoloRawDetection,
-} from './yoloAdapter';
+  type IYoloServiceAdapter,
+  type YoloRawDetection,
+} from './yoloAdapter.ts';
 
 export interface IDetectionEngine {
   engineName: string;
   mode: SystemMode;
   statusLabel: string;
-  analyzeImage(imageSrcOrData: string, predefinedBays: ParkingBay[]): Promise<DetectionResult>;
+  analyzeImage(imageSrcOrData: string, predefinedBays: ParkingBay[], presetHint?: string): Promise<DetectionResult>;
   getModelInfo(): {
     name: string;
     version: string;
@@ -81,7 +81,11 @@ export class TechnicalCVPipelineEngine implements IDetectionEngine {
     };
   }
 
-  public async analyzeImage(imageSrcOrData: string, predefinedBays: ParkingBay[]): Promise<DetectionResult> {
+  public async analyzeImage(
+    imageSrcOrData: string,
+    predefinedBays: ParkingBay[],
+    presetHint?: string
+  ): Promise<DetectionResult> {
     const overallStartTime = performance.now();
     const stages: Array<{
       stage: string;
@@ -113,6 +117,7 @@ export class TechnicalCVPipelineEngine implements IDetectionEngine {
     try {
       yoloResult = await this.yoloAdapter.detect({
         imageBufferOrBase64: imageSrcOrData,
+        presetHint,
         confidenceThreshold: 0.5,
         iouThreshold: 0.45,
       });
@@ -133,6 +138,7 @@ export class TechnicalCVPipelineEngine implements IDetectionEngine {
       const localFallback = new LocalDeterministicYoloAdapter();
       yoloResult = await localFallback.detect({
         imageBufferOrBase64: imageSrcOrData,
+        presetHint,
         confidenceThreshold: 0.5,
       });
     }

@@ -23,7 +23,10 @@ interface SimulationContextState {
   setSpeed: (speed: '0.5x' | '1x' | '2x' | '5x') => void;
   stepForward: () => Promise<void>;
   reset: () => Promise<void>;
+  reseed: (seed: number | string) => Promise<void>;
   setScenario: (preset: 'morning_rush' | 'midday_turnover' | 'evening_exodus' | 'night_lull' | 'camera_failure' | 'unusual_spike') => Promise<void>;
+  seed: number | string;
+  scenarioPreset: string;
   baysChangedLastTick: number;
   lastUpdated: string;
   simulatedTime: string;
@@ -47,10 +50,13 @@ interface ParkingContextType {
     totalBays: number;
     availableSpaces: number;
     occupiedSpaces: number;
+    reservedSpaces?: number;
+    maintenanceSpaces?: number;
     occupancyPercentage: number;
     activeVehicles: number;
     averageSearchTimeMinutes: number;
     currentAlertsCount: number;
+    hasDetailedBayMap?: boolean;
     lastUpdated: string;
   };
   alerts: ParkingAlert[];
@@ -112,6 +118,8 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Simulation state
   const [isSimRunning, setIsSimRunning] = useState(true);
   const [simSpeed, setSimSpeed] = useState<'0.5x' | '1x' | '2x' | '5x'>('1x');
+  const [simSeed, setSimSeed] = useState<number | string>(42);
+  const [scenarioPreset, setScenarioPresetState] = useState<string>('morning_rush');
   const [baysChanged, setBaysChanged] = useState(0);
   const [simulatedTime, setSimulatedTime] = useState('10:34');
   const [flowRateIn, setFlowRateIn] = useState(44);
@@ -125,14 +133,17 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const [occupancyMetrics, setOccupancyMetrics] = useState({
+  const [occupancyMetrics, setOccupancyMetrics] = useState<ParkingContextType['occupancyMetrics']>({
     totalBays: 96,
-    availableSpaces: 47,
-    occupiedSpaces: 49,
-    occupancyPercentage: 51,
-    activeVehicles: 49,
+    availableSpaces: 46,
+    occupiedSpaces: 47,
+    reservedSpaces: 2,
+    maintenanceSpaces: 1,
+    occupancyPercentage: 49,
+    activeVehicles: 47,
     averageSearchTimeMinutes: 3.2,
     currentAlertsCount: 0,
+    hasDetailedBayMap: true,
     lastUpdated: new Date().toISOString(),
   });
 
@@ -165,7 +176,7 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const [parkingData, occ, alertData, simState, fbStats] = await Promise.all([
         api.fetchParkingData(),
-        api.fetchOccupancyMetrics(),
+        api.fetchOccupancyMetrics(selectedLotId),
         api.fetchAlerts(),
         api.fetchSimulationState().catch(() => null),
         api.fetchRecommendationFeedback().catch(() => null),
@@ -190,6 +201,8 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (simState) {
         setIsSimRunning(simState.isRunning);
         setSimSpeed(simState.speed as any);
+        if (simState.seed !== undefined) setSimSeed(simState.seed);
+        if (simState.scenarioPreset) setScenarioPresetState(simState.scenarioPreset);
         setBaysChanged(simState.baysChangedLastTick);
         setSimulatedTime(simState.simulatedTime);
         setFlowRateIn(simState.flowRateInVehiclesPerHour);
@@ -210,7 +223,7 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (err) {
       console.warn('Data refresh failed:', err);
     }
-  }, []);
+  }, [selectedLotId]);
 
   useEffect(() => {
     refreshData();
@@ -241,7 +254,14 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updatePreferences = (newPrefs: Partial<UserPreferences>) => {
     setPreferences((prev) => {
       const updated = { ...prev, ...newPrefs };
-      api.getRecommendations(updated).then(setRecommendations).catch(() => null);
+      api.getRecommendations(updated).then((rec) => {
+        setRecommendations(rec);
+        if (newPrefs.preferredEntrance && navigationTarget) {
+          api.fetchNavigationRoute(navigationTarget.id, updated.preferredEntrance)
+            .then(setActiveNavigationRoute)
+            .catch(() => null);
+        }
+      }).catch(() => null);
       return updated;
     });
   };
@@ -303,8 +323,16 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setScenario = async (
     preset: 'morning_rush' | 'midday_turnover' | 'evening_exodus' | 'night_lull' | 'camera_failure' | 'unusual_spike'
   ) => {
+    setScenarioPresetState(preset);
     await api.updateSimulation(isSimRunning, simSpeed, undefined, preset);
     await refreshData();
+  };
+
+  const reseed = async (seed: number | string) => {
+    setSimSeed(seed);
+    await api.updateSimulation(isSimRunning, simSpeed, seed);
+    await refreshData();
+    await refreshRecommendations();
   };
 
   const stepForward = async () => {
@@ -381,7 +409,10 @@ export const ParkingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setSpeed,
           stepForward,
           reset,
+          reseed,
           setScenario,
+          seed: simSeed,
+          scenarioPreset,
           baysChangedLastTick: baysChanged,
           lastUpdated,
           simulatedTime,

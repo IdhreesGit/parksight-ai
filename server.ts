@@ -12,7 +12,7 @@ import {
   simulationHistoryBuffer,
   syncLotStats,
   propagateRealDetectionsToStore,
-} from './src/server/parkingStore';
+} from './src/server/parkingStore.ts';
 import {
   initSimulationEngine,
   getSimulationState,
@@ -22,25 +22,34 @@ import {
   reseedSimulation,
   performSimulationCycle,
   resetSimulation,
-  SimSpeed,
-  ScenarioPreset,
-} from './src/server/simulationService';
-import { calculateStatisticalPrediction } from './src/server/predictionService';
-import { getAlertsWithStatus, triggerCameraInterruption } from './src/server/anomalyService';
-import { inspectParkingSceneWithGemini } from './src/server/geminiService';
-import { calculateBayRecommendations } from './src/services/recommendationEngine';
-import { generateNavigationRoute } from './src/services/navigationService';
-import { SimulationDetectionEngine, RealYOLODetectionEngine } from './src/services/detectionEngine';
-import { HttpYoloServiceAdapter } from './src/services/yoloAdapter';
-import { UserPreferences, StatusFeedback, SystemHealth, RecommendationFeedback, SubsystemStatus, DetectionSourceType } from './src/types';
+  type SimSpeed,
+  type ScenarioPreset,
+} from './src/server/simulationService.ts';
+import { calculateStatisticalPrediction } from './src/server/predictionService.ts';
+import { getAlertsWithStatus, triggerCameraInterruption } from './src/server/anomalyService.ts';
+import { inspectParkingSceneWithGemini } from './src/server/geminiService.ts';
+import { calculateBayRecommendations } from './src/services/recommendationEngine.ts';
+import { generateNavigationRoute } from './src/services/navigationService.ts';
+import { SimulationDetectionEngine, RealYOLODetectionEngine } from './src/services/detectionEngine.ts';
+import { HttpYoloServiceAdapter } from './src/services/yoloAdapter.ts';
+import type {
+  UserPreferences,
+  StatusFeedback,
+  SystemHealth,
+  RecommendationFeedback,
+  SubsystemStatus,
+  DetectionSourceType,
+} from './src/types.ts';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = 3000;
+export const app = express();
+const PORT = Number(process.env.PORT) || 3000;
+const isVercelServerless = Boolean(process.env.VERCEL);
+let lastServerlessSimStepMs = Date.now();
 
 // Up to 30MB payload limit for camera frame streams
 app.use(express.json({ limit: '30mb' }));
@@ -71,8 +80,37 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Start background simulation engine
-initSimulationEngine();
+// Start background simulation engine on persistent Node/Cloud Run servers
+if (!isVercelServerless) {
+  initSimulationEngine();
+} else {
+  // In serverless environments without background timers, advance simulation deterministically on poll
+  app.use((_req, _res, next) => {
+    const sim = getSimulationState();
+    const nowMs = Date.now();
+    if (sim.isRunning && nowMs - lastServerlessSimStepMs >= sim.intervalMs) {
+      lastServerlessSimStepMs = nowMs;
+      performSimulationCycle();
+    }
+    next();
+  });
+}
+
+// Lightweight Health Check Endpoint (Cloud Run & Vercel Verification)
+app.get('/api/health', (_req, res) => {
+  syncLotStats();
+  const simState = getSimulationState();
+  res.json({
+    status: 'ok',
+    service: 'parksight-ai',
+    version: '3.0.0',
+    reviewStage: 'Review 3',
+    runtime: isVercelServerless ? 'vercel-serverless' : 'node-express',
+    simulationRunning: simState.isRunning,
+    totalBays: parkingBays.length,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // REST API ROUTES
 app.get('/api/parking', (_req, res) => {
@@ -86,26 +124,43 @@ app.get('/api/parking', (_req, res) => {
   });
 });
 
+app.get('/api/lots', (_req, res) => {
+  syncLotStats();
+  res.json({ lots: parkingLots, isDemo: true });
+});
+
 app.get('/api/parking/:id', (req, res) => {
+  syncLotStats();
   const lot = parkingLots.find((l) => l.id === req.params.id);
   if (!lot) return res.status(404).json({ error: 'Parking facility not found' });
   const bays = parkingBays.filter((b) => b.lotId === req.params.id);
-  res.json({ lot, bays, isDemo: true });
+  res.json({ lot, bays, hasDetailedBayMap: lot.id === 'campus-deck', isDemo: true });
 });
 
-app.get('/api/occupancy', (_req, res) => {
+app.get('/api/occupancy', (req, res) => {
   syncLotStats();
-  const campus = parkingLots.find((l) => l.id === 'campus-deck') || parkingLots[0];
+  const requestedLotId = (req.query.lotId as string) || 'campus-deck';
+  const targetLot =
+    parkingLots.find((l) => l.id === requestedLotId) ||
+    parkingLots.find((l) => l.id === 'campus-deck') ||
+    parkingLots[0];
   const simState = getSimulationState();
   const alertStatus = getAlertsWithStatus();
+  const searchTime = +(2.0 + (targetLot.occupancyRate / 100) * 3.8).toFixed(1);
+
   res.json({
-    totalBays: campus.totalBays,
-    availableSpaces: campus.availableBays,
-    occupiedSpaces: campus.occupiedBays,
-    occupancyPercentage: campus.occupancyRate,
-    activeVehicles: campus.occupiedBays,
-    averageSearchTimeMinutes: simState.averageSearchTimeMinutes,
+    lotId: targetLot.id,
+    lotName: targetLot.name,
+    totalBays: targetLot.totalBays,
+    availableSpaces: targetLot.availableBays,
+    occupiedSpaces: targetLot.occupiedBays,
+    reservedSpaces: targetLot.reservedBays,
+    maintenanceSpaces: targetLot.maintenanceBays,
+    occupancyPercentage: targetLot.occupancyRate,
+    activeVehicles: targetLot.occupiedBays,
+    averageSearchTimeMinutes: targetLot.id === 'campus-deck' ? simState.averageSearchTimeMinutes : searchTime,
     currentAlertsCount: alertStatus.unreadCount,
+    hasDetailedBayMap: targetLot.id === 'campus-deck',
     isSimulated: true,
     dataSource: 'Simulation Engine v3.0 (Digital Twin Single Source of Truth)',
     lastUpdated: simState.lastUpdated,
@@ -258,11 +313,13 @@ app.get('/api/prediction', (req, res) => {
   syncLotStats();
   const campus = parkingLots.find((l) => l.id === 'campus-deck') || parkingLots[0];
   const horizon = req.query.horizon ? parseInt(req.query.horizon as string, 10) : 30;
+  const alpha = req.query.alpha ? parseFloat(req.query.alpha as string) : 0.35;
   const prediction = calculateStatisticalPrediction(
     simulationHistoryBuffer,
     campus.occupancyRate,
     campus.totalBays,
-    horizon
+    horizon,
+    alpha
   );
   res.json(prediction);
 });
@@ -362,15 +419,15 @@ app.post('/api/feedback/:id/resolve', (req, res) => {
 
 // Computer Vision & YOLO / Gemini Inspection Endpoint
 app.post('/api/detection/analyze', async (req, res) => {
-  const { engineType = 'simulation', imageBase64, runGeminiInspection = false, yoloEndpoint } = req.body;
+  const { engineType = 'simulation', imageBase64, runGeminiInspection = false, yoloEndpoint, presetId } = req.body;
   let detectionResult;
 
   if (engineType === 'yolo_interface') {
     const yolo = new RealYOLODetectionEngine(yoloEndpoint);
-    detectionResult = await yolo.analyzeImage(imageBase64 || '', parkingBays);
+    detectionResult = await yolo.analyzeImage(imageBase64 || '', parkingBays, presetId);
   } else {
     const sim = new SimulationDetectionEngine();
-    detectionResult = await sim.analyzeImage(imageBase64 || '', parkingBays);
+    detectionResult = await sim.analyzeImage(imageBase64 || '', parkingBays, presetId);
   }
 
   // If Gemini multimodal scene inspection is requested:
@@ -515,7 +572,7 @@ app.get('/api/system-status', async (_req, res) => {
   res.json(health);
 });
 
-// Static Serving vs Dev Vite Middleware
+// Static Serving vs Dev Vite Middleware (Skipped when imported by Vercel Serverless Function)
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -525,7 +582,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -537,4 +594,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!isVercelServerless) {
+  startServer();
+}
+
+export default app;

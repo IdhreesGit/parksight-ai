@@ -72,14 +72,14 @@ export const AboutStatusView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Info className="w-5 h-5 text-cyan-400" />
             <h1 className="text-lg font-bold text-white tracking-tight">
-              About ParkSight AI &amp; Subsystem Health (Review 2)
+              About ParkSight AI &amp; Subsystem Health (Review 3)
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">
               AUDITED STATUS
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Academic portfolio specification, system observability, genuine subsystem status, and failure modes.
+            AI Immersion Programme &bull; Task 01 (C29) &bull; Rathinam Technical Campus, Coimbatore &mdash; real vs simulated subsystem observability and failure-mode transparency.
           </p>
         </div>
         <button

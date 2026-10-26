@@ -1,4 +1,4 @@
-import { ParkingLot, ParkingBay, ParkingAlert, ParkingEvent } from '../types';
+import type { ParkingLot, ParkingBay, ParkingAlert, ParkingEvent } from '../types.ts';
 
 export const INITIAL_LOTS: ParkingLot[] = [
   {
@@ -6,12 +6,12 @@ export const INITIAL_LOTS: ParkingLot[] = [
     name: 'Campus Parking Structure',
     location: 'Main University Blvd (Gate 1)',
     totalBays: 96,
-    availableBays: 47,
-    occupiedBays: 49,
-    reservedBays: 4,
-    maintenanceBays: 2,
-    occupancyRate: 51,
-    status: 'moderate',
+    availableBays: 46,
+    occupiedBays: 47,
+    reservedBays: 2,
+    maintenanceBays: 1,
+    occupancyRate: 49,
+    status: 'optimal',
     levels: 2,
     entrances: ['Main Entrance (North)', 'East Walkway', 'South Ramp', 'West Transit Center'],
     operatingHours: '24/7 Mon-Sun',
@@ -24,7 +24,7 @@ export const INITIAL_LOTS: ParkingLot[] = [
     name: 'North Surface Parking',
     location: 'Engineering Complex North',
     totalBays: 120,
-    availableBays: 32,
+    availableBays: 25,
     occupiedBays: 88,
     reservedBays: 6,
     maintenanceBays: 1,
@@ -42,7 +42,7 @@ export const INITIAL_LOTS: ParkingLot[] = [
     name: 'South Commuter Lot',
     location: 'Athletics & Transit Hub',
     totalBays: 80,
-    availableBays: 55,
+    availableBays: 53,
     occupiedBays: 25,
     reservedBays: 2,
     maintenanceBays: 0,
@@ -60,7 +60,7 @@ export const INITIAL_LOTS: ParkingLot[] = [
     name: 'Visitor & Administration Lot',
     location: 'Administration Building Front',
     totalBays: 45,
-    availableBays: 12,
+    availableBays: 6,
     occupiedBays: 33,
     reservedBays: 5,
     maintenanceBays: 1,
@@ -75,7 +75,7 @@ export const INITIAL_LOTS: ParkingLot[] = [
   },
 ];
 
-// Generate 96 realistic bays for Campus Parking Structure
+// Generate 96 realistic bays for Campus Parking Structure (4 balanced 24-bay sections)
 export function generateCampusBays(): ParkingBay[] {
   const bays: ParkingBay[] = [];
   const sections = [
@@ -84,7 +84,7 @@ export function generateCampusBays(): ParkingBay[] {
     { name: 'South Wing', level: 1, row: 'C', count: 12, startY: 52 },
     { name: 'South Wing', level: 1, row: 'D', count: 12, startY: 70 },
     { name: 'East Courtyard', level: 2, row: 'E', count: 24, startY: 15 },
-    { name: 'East Courtyard', level: 2, row: 'F', count: 24, startY: 55 },
+    { name: 'West Deck', level: 2, row: 'F', count: 24, startY: 55 },
   ];
 
   let bayCounter = 1;
@@ -106,13 +106,13 @@ export function generateCampusBays(): ParkingBay[] {
         type = 'maintenance';
       }
 
-      // Initial occupancy: ~51% occupied (49 occupied, 47 available)
-      const isOccupiedInitially = (bayCounter * 7 + i * 3) % 2 === 0;
+      // Deterministic ~49% initial occupancy across assignable bays (47 occupied, 46 available, 2 reserved, 1 maintenance = 96)
+      const isOccupiedInitially = i % 2 === 1;
       bayCounter++;
 
       if (type === 'maintenance') {
         status = 'maintenance';
-      } else if (type === 'reserved' && i === 1) {
+      } else if (type === 'reserved') {
         status = 'reserved';
       } else if (isOccupiedInitially) {
         status = 'occupied';
@@ -120,15 +120,15 @@ export function generateCampusBays(): ParkingBay[] {
         status = 'available';
       }
 
-      const vehicleModels = ['Tesla Model 3', 'Honda Civic', 'Toyota RAV4', 'Ford F-150', 'Hyundai Ioniq 5', 'BMW i4', 'Nissan Leaf'];
       const vehicleColors = ['Midnight Blue', 'Pearl White', 'Slate Grey', 'Deep Black', 'Silver Metallic'];
-      const vehicleType = type === 'ev' ? 'ev' : ((i % 3 === 0) ? 'suv' : 'compact');
+      const vehicleType = type === 'ev' ? 'ev' : i % 3 === 0 ? 'suv' : 'compact';
       const colIndex = (i - 1) % 12;
+      const rowSubOffset = i > 12 ? 18 : 0; // Second sub-row for 24-bay Level 2 sections
       const x = +(8 + colIndex * 7.5).toFixed(1); // percent
-      const y = sec.startY;
+      const y = sec.startY + rowSubOffset;
       const width = 6.2;
       const height = 12.0;
-      const distance = Math.round(15 + colIndex * 8 + (sec.level === 2 ? 45 : 0) + (sec.row === 'D' ? 30 : 0));
+      const distance = Math.round(15 + colIndex * 8 + (sec.level === 2 ? 45 : 0) + (sec.row === 'D' || sec.row === 'F' ? 30 : 0));
       const walkingMinutes = +(distance / 65).toFixed(1);
 
       // Define 4 polygon corner points (top-left, top-right, bottom-right, bottom-left)
@@ -153,16 +153,19 @@ export function generateCampusBays(): ParkingBay[] {
         confidence: status === 'occupied' ? 0.94 : 0.98,
         distanceToEntranceMeters: distance,
         estimatedWalkingMinutes: Math.max(0.5, walkingMinutes),
-        lastUpdated: new Date(Date.now() - (i * 45000)).toISOString(),
-        vehicleDetected: status === 'occupied' ? {
-          type: vehicleType as any,
-          color: vehicleColors[i % vehicleColors.length],
-          confidence: +(0.88 + (i % 10) * 0.01).toFixed(2),
-          simulationCertainty: 1.0,
-          detectedAt: new Date(Date.now() - (i * 75000)).toISOString(),
-          plateMasked: `SIM-***${10 + i}`,
-          source: 'SIMULATOR',
-        } : undefined,
+        lastUpdated: new Date(Date.now() - i * 45000).toISOString(),
+        vehicleDetected:
+          status === 'occupied'
+            ? {
+                type: vehicleType as any,
+                color: vehicleColors[i % vehicleColors.length],
+                confidence: +(0.88 + (i % 10) * 0.01).toFixed(2),
+                simulationCertainty: 1.0,
+                detectedAt: new Date(Date.now() - i * 75000).toISOString(),
+                plateMasked: `SIM-***${10 + i}`,
+                source: 'SIMULATOR',
+              }
+            : undefined,
         detectionSource: 'Simulation Engine',
         x,
         y,
@@ -170,7 +173,6 @@ export function generateCampusBays(): ParkingBay[] {
         height,
         polygon,
       });
-      bayCounter++;
     }
   });
 

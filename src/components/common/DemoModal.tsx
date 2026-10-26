@@ -20,7 +20,7 @@ export const DemoModal: React.FC = () => {
               <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                 Academic Integrity & Subsystem Transparency
               </h2>
-              <p className="text-xs text-slate-400">Review 2 Engineering Audit Disclosure</p>
+              <p className="text-xs text-slate-400">Review 3 Engineering Audit Disclosure &bull; Task 01 (C29)</p>
             </div>
           </div>
           <button
@@ -46,8 +46,8 @@ export const DemoModal: React.FC = () => {
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                   REAL
                 </span>
-                <p className="text-[11px] text-slate-300 mt-1.5 font-medium">Image/Video Ingest &amp; Pixel CV</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Real canvas frame processing, bounding box generation, and IoU polygon evaluation.</p>
+                <p className="text-[11px] text-slate-300 mt-1.5 font-medium">IoU Math &amp; Express API</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Real 2D IoU polygon evaluation, 3-frame hysteresis, and external YOLO adapter (requires live YOLO endpoint).</p>
               </div>
 
               <div className="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30">

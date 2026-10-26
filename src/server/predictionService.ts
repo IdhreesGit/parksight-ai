@@ -1,4 +1,4 @@
-import { StatisticalPrediction, SimulationHistorySnapshot } from '../types';
+import type { StatisticalPrediction, SimulationHistorySnapshot } from '../types.ts';
 
 /**
  * Holt's Double Exponential Smoothing (Level + Trend Extrapolation)
@@ -16,10 +16,12 @@ export function calculateStatisticalPrediction(
   historySnapshots: SimulationHistorySnapshot[],
   currentRate: number,
   totalBays: number,
-  horizonMinutes = 30
+  horizonMinutes = 30,
+  alphaParam = 0.35,
+  betaParam = 0.20
 ): StatisticalPrediction {
-  const alpha = 0.35; // Smoothing parameter for level
-  const beta = 0.20; // Smoothing parameter for trend slope
+  const alpha = Math.min(0.95, Math.max(0.05, Number.isFinite(alphaParam) ? alphaParam : 0.35));
+  const beta = Math.min(0.95, Math.max(0.05, Number.isFinite(betaParam) ? betaParam : 0.20));
 
   // Format historical points for visualization
   const historicalPoints = historySnapshots.slice(-20).map((h) => ({
@@ -39,7 +41,7 @@ export function calculateStatisticalPrediction(
       trendDirection: 'Stable (0.0%/hr)',
       confidenceScore: '95% Confidence (Initial baseline state)',
       confidenceInterval: '± 4.0%',
-      explanation: 'Accumulating simulation time-series frames; baseline instantaneous state projected forward.',
+      explanation: `Accumulating simulation time-series frames (alpha=${alpha.toFixed(2)}); baseline instantaneous state projected forward.`,
       predictionExplanation: 'Initial buffer filling; zero trend detected.',
       validationStatus: 'Prototype Model (Single Source of Truth Connected)',
       modelType: 'PROTOTYPE HEURISTIC / TIME-SERIES EXTENSION',
@@ -53,6 +55,8 @@ export function calculateStatisticalPrediction(
         { minuteOffset: 20, predictedPercent: currentRate, lower: Math.max(0, currentRate - 4), upper: Math.min(100, currentRate + 4) },
         { minuteOffset: 30, predictedPercent: currentRate, lower: Math.max(0, currentRate - 5), upper: Math.min(100, currentRate + 5) },
       ],
+      alpha,
+      beta,
     };
   }
 
@@ -128,7 +132,7 @@ export function calculateStatisticalPrediction(
     trendDirection,
     confidenceScore: `95% Confidence Interval [${lowerPercent}% - ${upperPercent}%] (SE = ${standardError.toFixed(1)}%)`,
     confidenceInterval: `± ${marginOfError}%`,
-    explanation: `Calculated from ${historySnapshots.length} accumulated simulation snapshots. Level S=${s.toFixed(1)}%, Trend Slope b=${b >= 0 ? '+' : ''}${b.toFixed(2)}%/10m.`,
+    explanation: `Calculated from ${historySnapshots.length} accumulated simulation snapshots (alpha=${alpha.toFixed(2)}, beta=${beta.toFixed(2)}). Level S=${s.toFixed(1)}%, Trend Slope b=${b >= 0 ? '+' : ''}${b.toFixed(2)}%/10m.`,
     predictionExplanation: `Current occupancy (${currentRate}%) extrapolated over +${horizonMinutes} min window. Estimated trend slope indicates ${trendDirection.toLowerCase()}.`,
     validationStatus: 'Prototype Model (Single Source of Truth Connected)',
     modelType: 'PROTOTYPE HEURISTIC / TIME-SERIES EXTENSION',
@@ -138,5 +142,7 @@ export function calculateStatisticalPrediction(
       upperPercent,
     },
     forecastSeries,
+    alpha,
+    beta,
   };
 }

@@ -33,7 +33,7 @@ export const AnalyticsView: React.FC = () => {
     setLoading(true);
     Promise.all([
       fetchAnalytics(range),
-      fetchStatisticalPrediction(selectedHorizon),
+      fetchStatisticalPrediction(selectedHorizon, alpha),
     ])
       .then(([data, pred]) => {
         if (isMounted) {
@@ -49,7 +49,7 @@ export const AnalyticsView: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [range, selectedHorizon]);
+  }, [range, selectedHorizon, alpha]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -66,7 +66,7 @@ export const AnalyticsView: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Historical diurnal occupancy behavior, turnover intervals, vehicle ingress/egress, and Holt double exponential forecasting.
+            Historical diurnal occupancy behavior, turnover intervals, vehicle ingress/egress, and Holt double exponential forecasting ({selectedLot?.name || 'Campus Parking Structure'}).
           </p>
         </div>
 
@@ -88,7 +88,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
       </div>
 
-      {/* STATISTICAL PREDICTION ENGINE (Review 2 Requirement 12) */}
+      {/* STATISTICAL PREDICTION ENGINE */}
       <div className="p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-800/40 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-900/40 pb-3">
           <div>
@@ -99,7 +99,7 @@ export const AnalyticsView: React.FC = () => {
               </h2>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Technically accurate labeling: Evaluates level ($S_t$) and trend ($b_t$) without claiming seasonal periodicity without full Fourier terms.
+              Technically accurate labeling: Evaluates level (S_t) and linear trend (b_t) with configurable smoothing parameter &alpha; = {alpha.toFixed(2)}.
             </p>
           </div>
           <div className="flex items-center gap-1.5 self-start sm:self-auto">
@@ -124,11 +124,11 @@ export const AnalyticsView: React.FC = () => {
           {/* Forecast Metric */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
             <span className="text-slate-400 block text-[11px]">Forecast (+{selectedHorizon} Minutes)</span>
-            <div className="text-2xl font-bold font-mono text-cyan-300">
-              {prediction?.predictedOccupancyPercent || 68}%
+            <div className="text-2xl font-bold font-mono tabular-nums text-cyan-300">
+              {prediction?.predictedOccupancyPercent ?? 68}%
             </div>
             <p className="text-[10px] text-slate-500">
-              Expected Free: ~{prediction?.expectedAvailableSpaces || 31} bays
+              Expected Free: ~{prediction?.expectedAvailableSpaces ?? 31} bays {loading ? '(updating...)' : ''}
             </p>
           </div>
 

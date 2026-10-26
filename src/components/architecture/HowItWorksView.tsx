@@ -104,12 +104,12 @@ export const HowItWorksView: React.FC = () => {
       title: 'Occupancy Classification & Debouncing',
       icon: CheckCircle2,
       category: 'Classification',
-      summary: 'Applies dual thresholding (IoU > 0.45 = Occupied candidate; IoU < 0.20 = Vacant candidate; 0.20-0.45 = Unknown/Low Confidence) to prevent edge ambiguity.',
+      summary: 'Applies dual thresholding (IoU >= 0.45 = Occupied candidate; IoU <= 0.15 = Vacant candidate; 0.15 < IoU < 0.45 = Indeterminate / Low Confidence) to prevent edge ambiguity.',
       input: 'Bay overlap percentages per bay ID.',
       method: 'Schmitt trigger dual-threshold classification with pedestrian shadow rejection filter.',
       output: 'Classification flag: candidate_occupied vs candidate_available vs indeterminate.',
       latency: '< 1 ms.',
-      failsafe: 'Default to last-known stable state if IoU falls in indeterminate hysteresis zone (0.20 - 0.45). Do not falsely mark as available.',
+      failsafe: 'Default to low_confidence / last-known stable state if IoU falls in indeterminate hysteresis zone (0.15 - 0.45). Do not falsely mark as available.',
       digitalTwinRole: 'Provides ground-truth classification labels to benchmark against detection outputs.',
     },
     {
@@ -179,7 +179,7 @@ export const HowItWorksView: React.FC = () => {
               Interactive 10-Stage Computer Vision &amp; AI Architecture Pipeline
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">
-              REVIEW 2 ARCHITECTURE SPECIFICATION
+              REVIEW 3 ARCHITECTURE SPECIFICATION
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -216,7 +216,7 @@ export const HowItWorksView: React.FC = () => {
               Slot is published as vacant. Drivers can be routed here.
             </p>
             <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-900">
-              Trigger: IoU &lt; 0.20 confirmed
+              Trigger: IoU &le; 0.15 confirmed
             </div>
           </div>
 
@@ -242,7 +242,7 @@ export const HowItWorksView: React.FC = () => {
               Vehicle fully settled. Bay is locked in database as occupied.
             </p>
             <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-900">
-              Trigger: 3 frames &gt; 0.45 IoU
+              Trigger: 3 frames &ge; 0.45 IoU
             </div>
           </div>
 
@@ -319,25 +319,25 @@ export const HowItWorksView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-              <strong className="text-slate-200 block text-[11px] uppercase tracking-wider text-cyan-400">
+              <strong className="block text-[11px] uppercase tracking-wider text-cyan-400">
                 Input Payload
               </strong>
               <p className="text-slate-400">{current.input}</p>
             </div>
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-              <strong className="text-slate-200 block text-[11px] uppercase tracking-wider text-emerald-400">
+              <strong className="block text-[11px] uppercase tracking-wider text-emerald-400">
                 Output Artifact
               </strong>
               <p className="text-slate-400">{current.output}</p>
             </div>
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-              <strong className="text-slate-200 block text-[11px] uppercase tracking-wider text-amber-400">
+              <strong className="block text-[11px] uppercase tracking-wider text-amber-400">
                 Method / Algorithm / Model
               </strong>
               <p className="text-slate-400">{current.method}</p>
             </div>
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-              <strong className="text-slate-200 block text-[11px] uppercase tracking-wider text-rose-400">
+              <strong className="block text-[11px] uppercase tracking-wider text-rose-400">
                 Fail-Safe &amp; Fallback Logic
               </strong>
               <p className="text-slate-400">{current.failsafe}</p>

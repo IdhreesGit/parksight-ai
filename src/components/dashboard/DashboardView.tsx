@@ -56,10 +56,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onSele
       const total = secBays.length || 24;
       const occupied = secBays.filter((b) => b.status === 'occupied').length;
       const available = secBays.filter((b) => b.status === 'available').length;
+      const nonParkable = secBays.filter((b) => b.status === 'reserved' || b.status === 'maintenance').length;
       const evCount = secBays.filter((b) => b.type === 'ev' && b.status === 'available').length;
       const adaCount = secBays.filter((b) => b.type === 'accessible' && b.status === 'available').length;
       const rate = Math.round((occupied / total) * 100);
-      return { name: sec, total, occupied, available, evCount, adaCount, rate };
+      return { name: sec, total, occupied, available, nonParkable, evCount, adaCount, rate };
     });
   }, [bays]);
 
@@ -231,19 +232,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onSele
               </span>
               <span className="text-xs text-slate-400">of {occupancyMetrics.totalBays} Bays</span>
             </div>
-            <div className="mt-3 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" /> Level 1 (Ground)
-                </span>
-                <span className="font-mono font-medium text-emerald-400">{levelStats.l1.available} free</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" /> Level 2 (Upper)
-                </span>
-                <span className="font-mono font-medium text-emerald-400">{levelStats.l2.available} free</span>
-              </div>
+            <div className="mt-3 space-y-1.5 text-xs tabular-nums">
+              {(!selectedLot || selectedLot.id === 'campus-deck') ? (
+                <>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <Layers className="w-3.5 h-3.5 text-cyan-400" /> Level 1 (Ground)
+                    </span>
+                    <span className="font-mono font-medium text-emerald-400">{levelStats.l1.available} free</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <Layers className="w-3.5 h-3.5 text-cyan-400" /> Level 2 (Upper)
+                    </span>
+                    <span className="font-mono font-medium text-emerald-400">{levelStats.l2.available} free</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Occupied Stalls</span>
+                    <span className="font-mono font-medium text-slate-200">{selectedLot.occupiedBays} bays</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Reserved / Maint</span>
+                    <span className="font-mono font-medium text-amber-400">
+                      {selectedLot.reservedBays + selectedLot.maintenanceBays} bays
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <button
@@ -274,8 +292,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onSele
                     {topRec.bay.type === 'ev' ? 'EV Charging' : topRec.bay.type === 'accessible' ? 'ADA Accessible' : 'Standard'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 mt-1">
-                  {topRec.bay.section} &bull; L{topRec.bay.level} &bull; {topRec.bay.distanceToEntranceMeters}m walk
+                <p className="text-xs text-slate-300 mt-1 tabular-nums">
+                  {topRec.bay.section} &bull; L{topRec.bay.level} &bull; {topRec.navigationRoute?.totalDistanceMeters ?? topRec.bay.distanceToEntranceMeters}m walk
                 </p>
                 <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-1 italic">
                   &ldquo;{topRec.reasons[0]}&rdquo;
@@ -414,9 +432,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onSele
                     style={{ width: `${sec.rate}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-1 tabular-nums">
                   <span className="text-emerald-400 font-semibold font-mono">
-                    {sec.available} available <span className="text-slate-500">/ {sec.total}</span>
+                    {sec.available} avail{' '}
+                    <span className="text-slate-500">
+                      &bull; {sec.occupied} occ{sec.nonParkable > 0 ? ` · ${sec.nonParkable} res` : ''} / {sec.total}
+                    </span>
                   </span>
                   <div className="flex items-center gap-2">
                     {sec.evCount > 0 && (

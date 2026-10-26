@@ -1,5 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
-import { GeminiSceneAnalysis } from '../types';
+import { GoogleGenAI, Type } from '@google/genai';
+import type { GeminiSceneAnalysis } from '../types.ts';
 
 let geminiClient: GoogleGenAI | null = null;
 
@@ -132,6 +132,20 @@ Important: Never invent facts. If certain conditions cannot be confidently infer
       ],
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            lighting: { type: Type.STRING },
+            weather: { type: Type.STRING },
+            obstructions: { type: Type.STRING },
+            notes: { type: Type.STRING },
+            detectionReliability: {
+              type: Type.STRING,
+              enum: ['High', 'Moderate', 'Low / Degraded'],
+            },
+          },
+          required: ['lighting', 'weather', 'obstructions', 'notes', 'detectionReliability'],
+        },
       },
     });
 

@@ -173,7 +173,30 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
               <option value="North Deck">North Deck (Level 1)</option>
               <option value="South Wing">South Wing (Level 1)</option>
               <option value="East Courtyard">East Courtyard (Level 2)</option>
+              <option value="West Deck">West Deck (Level 2)</option>
             </select>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Footprints className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Hard Walking Radius Constraint ({preferences.preferredEntrance}):</span>
+            <strong className="font-mono text-cyan-300 tabular-nums">{preferences.maxWalkingDistanceMeters}m max</strong>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-64">
+            <span className="text-[10px] font-mono text-slate-500">35m</span>
+            <input
+              type="range"
+              min="35"
+              max="120"
+              step="5"
+              value={preferences.maxWalkingDistanceMeters}
+              onChange={(e) => updatePreferences({ maxWalkingDistanceMeters: parseInt(e.target.value, 10) })}
+              className="flex-1 accent-cyan-500"
+              aria-label="Maximum walking distance in meters"
+            />
+            <span className="text-[10px] font-mono text-slate-500">120m</span>
           </div>
         </div>
       </div>
@@ -260,7 +283,11 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
                     </span>
                   </div>
                   <h3 className="text-sm font-semibold text-white mt-1">
-                    {bestMatch.bay.section} &bull; Level {bestMatch.bay.level} &bull; Row {bestMatch.bay.row}
+                    {bestMatch.bay.section} &bull; Level {bestMatch.bay.level} &bull; Row {bestMatch.bay.row} &bull;{' '}
+                    <span className="text-cyan-300 font-mono">
+                      {bestMatch.navigationRoute?.totalDistanceMeters ?? bestMatch.bay.distanceToEntranceMeters}m
+                    </span>{' '}
+                    to {preferences.preferredEntrance}
                   </h3>
                 </div>
               </div>
@@ -426,8 +453,8 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
                     <p className="text-xs text-slate-300 font-medium">
                       {alt.bay.section} &bull; Level {alt.bay.level}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {alt.bay.distanceToEntranceMeters}m walk &bull; {alt.bay.type === 'ev' ? 'Level 2 EV' : alt.bay.type === 'accessible' ? 'ADA' : 'Standard'}
+                    <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                      {alt.navigationRoute?.totalDistanceMeters ?? alt.bay.distanceToEntranceMeters}m walk &bull; {alt.bay.type === 'ev' ? 'Level 2 EV' : alt.bay.type === 'accessible' ? 'ADA' : 'Standard'}
                     </p>
 
                     <div className="mt-3 pt-2 border-t border-slate-800/80 space-y-1 text-[11px] text-slate-400">

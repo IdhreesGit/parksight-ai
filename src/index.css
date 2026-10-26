@@ -1,1 +1,62 @@
 @import "tailwindcss";
+
+/* Light mode theme overrides when html.light is active via Header theme toggle */
+html.light body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+html.light .bg-slate-950,
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/70,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/50,
+html.light .bg-slate-950\/40 {
+  background-color: #f1f5f9;
+}
+
+html.light .bg-slate-900,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/60 {
+  background-color: #ffffff;
+}
+
+html.light .bg-slate-800,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/60 {
+  background-color: #e2e8f0;
+}
+
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/60,
+html.light .border-slate-700,
+html.light .border-slate-700\/80,
+html.light .border-slate-700\/60 {
+  border-color: #cbd5e1;
+}
+
+html.light .text-white,
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #0f172a;
+}
+
+html.light .text-slate-300 {
+  color: #334155;
+}
+
+html.light .text-slate-400,
+html.light .text-slate-500 {
+  color: #475569;
+}
+
+html.light button.bg-cyan-600,
+html.light button.bg-blue-600,
+html.light button.bg-indigo-600,
+html.light .bg-cyan-600.text-white,
+html.light .bg-blue-600.text-white {
+  color: #ffffff;
+}
+

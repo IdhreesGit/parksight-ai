@@ -1,4 +1,4 @@
-import {
+import type {
   ParkingLot,
   ParkingBay,
   ParkingAlert,
@@ -9,8 +9,8 @@ import {
   BoundingBox,
   BayStatus,
   DetectionSourceType,
-} from '../types';
-import { INITIAL_LOTS, generateCampusBays, INITIAL_ALERTS, INITIAL_EVENTS } from '../data/seedData';
+} from '../types.ts';
+import { INITIAL_LOTS, generateCampusBays, INITIAL_ALERTS, INITIAL_EVENTS } from '../data/seedData.ts';
 
 // Single source of truth storage
 export const parkingLots: ParkingLot[] = JSON.parse(JSON.stringify(INITIAL_LOTS));
@@ -46,7 +46,7 @@ export const feedbackQueue: StatusFeedback[] = [
 export const recommendationFeedbackQueue: RecommendationFeedback[] = [
   {
     id: 'rf-001',
-    recommendationBayId: 'A3',
+    recommendationBayId: 'A2',
     driverAccepted: true,
     userRating: 5,
     feedbackComment: 'Shortest walking route to Science Quad. Exactly as described.',
@@ -55,7 +55,7 @@ export const recommendationFeedbackQueue: RecommendationFeedback[] = [
   },
   {
     id: 'rf-002',
-    recommendationBayId: 'B1',
+    recommendationBayId: 'B2',
     driverAccepted: true,
     userRating: 4,
     feedbackComment: 'EV charger worked properly.',
@@ -92,6 +92,10 @@ parkingBays.forEach((bay) => {
 const now = Date.now();
 const campusInit = parkingLots.find((l) => l.id === 'campus-deck') || parkingLots[0];
 const initialOccupancy = parkingBays.filter((b) => b.status === 'occupied').length;
+const nonAssignableCount = parkingBays.filter(
+  (b) => b.status === 'reserved' || b.status === 'maintenance'
+).length;
+const maxAssignableBays = Math.max(1, campusInit.totalBays - nonAssignableCount);
 
 for (let i = 14; i >= 0; i--) {
   const pastTime = new Date(now - i * 3 * 60 * 1000);
@@ -99,7 +103,7 @@ for (let i = 14; i >= 0; i--) {
   const minute = pastTime.getMinutes();
   const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   const variance = Math.sin(i * 0.4) * 3;
-  const occ = Math.max(10, Math.min(campusInit.totalBays, Math.round(initialOccupancy + variance)));
+  const occ = Math.max(10, Math.min(maxAssignableBays, Math.round(initialOccupancy + variance)));
   const occPercent = Math.round((occ / campusInit.totalBays) * 100);
 
   simulationHistoryBuffer.push({
@@ -108,7 +112,7 @@ for (let i = 14; i >= 0; i--) {
     simulatedTime: timeStr,
     occupancyPercent: occPercent,
     occupiedCount: occ,
-    availableCount: campusInit.totalBays - occ,
+    availableCount: Math.max(0, maxAssignableBays - occ),
     arrivalsDelta: Math.max(0, Math.round(3 + Math.sin(i) * 2)),
     departuresDelta: Math.max(0, Math.round(2 + Math.cos(i) * 2)),
     turnoverRate: 3.2,
@@ -119,20 +123,25 @@ for (let i = 14; i >= 0; i--) {
 export function syncLotStats() {
   const campus = parkingLots.find((l) => l.id === 'campus-deck') || parkingLots[0];
   if (campus) {
-    const occupied = parkingBays.filter((b) => b.status === 'occupied').length;
-    const available = parkingBays.filter((b) => b.status === 'available').length;
-    const reserved = parkingBays.filter((b) => b.status === 'reserved').length;
-    const maintenance = parkingBays.filter((b) => b.status === 'maintenance').length;
+    const campusBays = parkingBays.filter((b) => b.lotId === campus.id);
+    const total = campusBays.length || campus.totalBays;
+    const occupied = campusBays.filter((b) => b.status === 'occupied').length;
+    const available = campusBays.filter((b) => b.status === 'available').length;
+    const reserved = campusBays.filter((b) => b.status === 'reserved').length;
+    const maintenance = campusBays.filter((b) => b.status === 'maintenance').length;
 
+    campus.totalBays = total;
     campus.occupiedBays = occupied;
     campus.availableBays = available;
     campus.reservedBays = reserved;
     campus.maintenanceBays = maintenance;
-    campus.occupancyRate = Math.round((occupied / campus.totalBays) * 100);
+    campus.occupancyRate = Math.round((occupied / total) * 100);
     campus.status =
       campus.occupancyRate > 85 ? 'high_occupancy' : campus.occupancyRate > 70 ? 'moderate' : 'optimal';
   }
 }
+
+syncLotStats();
 
 /**
  * Propagate Computer Vision Detections to Global Parking State
@@ -168,6 +177,13 @@ export function propagateRealDetectionsToStore(
     if (!det.bayId) return;
     const targetBay = parkingBays.find((b) => b.id === det.bayId);
     if (!targetBay) return;
+    // Preserve dedicated reserved/maintenance stalls from automated CV overwrite
+    if (
+      sourceType !== 'MANUAL_DISPUTE' &&
+      (targetBay.status === 'maintenance' || targetBay.status === 'reserved')
+    ) {
+      return;
+    }
 
     updatedBaysCount++;
     const prevStatus = targetBay.status;

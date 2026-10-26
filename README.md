@@ -1,86 +1,86 @@
-# ParkSight AI — Smart Parking Platform (Review 2)
+# ParkSight AI — Smart Parking Platform (Review 3)
 
 ## 1. Project Overview
 
-ParkSight AI is an academic AI engineering prototype designed to address parking-space search and occupancy visibility.
+**ParkSight AI** is an AI Immersion Programme academic engineering project (**Task 01 — C29**, Rathinam Technical Campus, Coimbatore) designed to address parking-space search inefficiency and real-time occupancy visibility.
 
-The platform demonstrates computer-vision occupancy analysis with external YOLO integration, parking-bay IoU geometry, temporal occupancy stabilization, explainable recommendations, analytics, prediction, anomaly detection, navigation, and human feedback.
+The platform integrates a React 19 + TypeScript + Vite frontend with an Express backend providing computer-vision occupancy analysis via an external YOLO HTTP adapter, 2D parking-bay polygon IoU geometry, 3-frame temporal hysteresis stabilization, explainable 100-point heuristic recommendations, entrance-aware indoor waypoint navigation, Holt's Double Exponential Smoothing forecasts, rule-based anomaly detection, and human-in-the-loop dispute feedback.
 
-Local neural model weights are not bundled with the web application. YOLO inference is accessed through an external HTTP service. When that service is unavailable, the system clearly reports a simulated/test fallback.
+Local neural model weights are not bundled with the web application. Live YOLO neural inference is accessed through an external HTTP service (`YOLO_SERVICE_URL`). When that external service is unavailable, the system never fabricates live AI results—it explicitly reports **`YOLO SERVICE UNAVAILABLE — SIMULATED FALLBACK ACTIVE`**.
 
 ---
 
 ## 2. The Problem
 
-Drivers may spend unnecessary time searching for available parking spaces when current parking occupancy is not visible.
+Drivers spend unnecessary time cruising parking aisles when current stall availability is not visible at facility entrances.
 
-Key challenges include:
+Key operational challenges addressed:
 
-- Unstable single-frame detection
-- Temporary visual occlusion
-- Difficult-to-trust recommendations
-- Limited occupancy visibility
-- Privacy concerns around camera imagery
+- Unstable single-frame optical detection (pedestrian shadows, glare, transient headlights)
+- Temporary visual occlusion and boundary straddling (`0.15 < IoU < 0.45`)
+- Opaque "black-box" parking recommendations that drivers cannot verify
+- Discrepancies between available, occupied, reserved, and maintenance stall counts
+- Privacy concerns around camera imagery and license plates
 
 ---
 
-## 3. Key Features
+## 3. Key Features & Review 3 Improvements
 
-1. **Computer Vision Occupancy Analysis**  
-   Supports image/frame processing and external YOLO detection.
+1. **Computer Vision Occupancy Analysis & PNG Preset Pipeline**  
+   Processes uploaded frames and offscreen-rendered 640×360 PNG test scenes through an external YOLO HTTP adapter with explicit simulated fallback labeling.
 
-2. **Parking-Bay IoU Logic**  
-   Uses geometric overlap between vehicle bounding boxes and parking-bay polygons.
+2. **Spatial Parking-Bay IoU Geometry**  
+   Computes exact 2D bounding-box-to-bay-polygon overlap without leaking prior stall status into IoU scores.
 
-3. **Temporal Stability Filtering**  
-   Requires multiple consistent frames before confirming occupancy changes.
+3. **3-Frame Temporal Stability State Machine**  
+   Requires 3 consecutive matching observations (`confirmed_available` ↔ `candidate_occupied` ↔ `confirmed_occupied`) before committing transitions, while protecting `reserved` and `maintenance` stalls from automated CV overwrite.
 
-4. **Explainable Recommendations**  
-   Uses transparent multi-factor prototype scoring.
+4. **Verified Multi-Lot & 4×24 Section Capacity Accounting**  
+   Enforces `availableBays + occupiedBays + reservedBays + maintenanceBays === totalBays` across all 4 campus facilities (`campus-deck`: 96 bays across 4 symmetrical 24-bay sections including `West Deck`; `north-lot`: 120; `south-lot`: 80; `visitor-deck`: 45) and preserves non-parkable stalls across simulation resets.
 
-5. **Indoor Navigation**  
-   Generates prototype waypoint routes from entrance to parking bay.
+5. **Explainable 100-Point Recommendations & Entrance-Aware Routing**  
+   Evaluates hard constraints (ADA, Level 2 EV, walking radius) and computes gate-specific walking distances from `Main Entrance (North)`, `East Walkway`, `South Ramp`, and `West Transit Center`.
 
-6. **Short-Term Prediction**  
-   Uses Holt's Double Exponential Smoothing for occupancy forecasting.
+6. **Short-Term Occupancy Prediction (Holt's Double Exponential Smoothing)**  
+   Forecasts `+10m`, `+20m`, and `+30m` occupancy horizons with interactive level smoothing (`α`) and residual-derived 95% confidence bounds.
 
-7. **Rule-Based Anomaly Detection**  
-   Detects rapid occupancy changes, state chatter, saturation, and camera failures.
+7. **Seedable Digital Twin Simulation**  
+   Deterministic Mulberry32 PRNG traffic generator with live seed control and 6 operational benchmark presets (`morning_rush`, `midday_turnover`, `evening_exodus`, `night_lull`, `camera_failure`, `unusual_spike`).
 
-8. **Human Feedback Loop**  
-   Supports parking-status disputes and recommendation feedback.
+8. **Rule-Based Anomaly Detection & Human Feedback Loop**  
+   Flags surges, bay state chatter, saturation, and camera heartbeat drops with structured explanations, alongside crowd-sourced status dispute overrides.
 
-9. **Gemini Scene Inspection**  
-   Provides multimodal environmental analysis when configured.
+9. **Server-Side Gemini Multimodal Scene Inspection**  
+   Uses `@google/genai` (`gemini-3.8-flash`) with structured JSON schema on the Express backend when `GEMINI_API_KEY` is configured, falling back transparently when offline.
 
 10. **Privacy by Design**  
-    Avoids facial recognition and unnecessary personal-data storage.
+    Processes frames transiently in memory, masks license identifiers, and performs zero facial recognition.
 
 ---
 
 ## 4. Architecture Pipeline
 
 ```text
-Camera / Uploaded Image / Video Frame
-                ↓
-1. Data Acquisition & Decode
-                ↓
-2. Pre-processing & Normalization
-                ↓
-3. YOLO / Computer Vision Vehicle Detection
-                ↓
-4. Spatial Bay IoU Occupancy Logic
-   (≥0.45 Occupied, ≤0.15 Available)
-                ↓
-5. Temporal Stability Filter
-   (3-Frame Confirmation)
-                ↓
-6. Authoritative Parking State Store
-                ↓
+Camera / Uploaded Image / 640x360 PNG Test Frame
+                        ↓
+        1. Data Acquisition & Frame Decode
+                        ↓
+        2. Pre-processing & Normalization
+                        ↓
+        3. External YOLO Adapter / Sim Fallback
+                        ↓
+        4. Spatial Bay IoU Occupancy Logic
+           (≥0.45 Occupied, ≤0.15 Available, 0.15–0.45 Unknown)
+                        ↓
+        5. Temporal Stability Filter
+           (3-Frame Hysteresis Confirmation)
+                        ↓
+        6. Authoritative Parking State Store
+                        ↓
        ┌────────┼──────────┬─────────────┐
        ↓        ↓          ↓             ↓
    Dashboard  Events   Analytics   Rule Anomalies
-                       & Prediction       ↓
+   & 2D Map            & Holt (α)        ↓
                            ↓        Human Feedback
                     Recommendations
                            ↓
@@ -89,241 +89,79 @@ Camera / Uploaded Image / Video Frame
 
 ---
 
-## 5. Real vs Simulated Systems
+## 5. Real vs Simulated Systems (Academic Transparency)
 
 | Subsystem | Status | Description |
 |---|---|---|
-| Frame Ingest | SIMULATED / TEST | Processes uploaded frames and test inputs |
-| YOLO Integration | INTEGRATION READY | Connects to external YOLO HTTP service |
-| YOLO Fallback | SIMULATED | Used when external YOLO is unavailable |
-| Gemini Scene Inspection | REAL WHEN CONFIGURED | Uses server-side Gemini API |
-| Digital Twin Simulation | SIMULATED | Deterministic parking-traffic simulation |
-| Recommendation Engine | PROTOTYPE | Transparent heuristic scoring |
-| Demand Prediction | PROTOTYPE | Holt's Double Exponential Smoothing |
-| Anomaly Detection | REAL (RULES) | Deterministic threshold-based rules |
-| Indoor Navigation | PROTOTYPE | Vector waypoint routing |
+| Spatial 2D IoU & Hysteresis | REAL | Deterministic geometric overlap and 3-frame state machine |
+| External YOLO Integration | INTEGRATION READY | HTTP adapter (`YOLO_SERVICE_URL`); requires external YOLO server for live neural inference |
+| YOLO Offline Fallback | SIMULATED | Explicitly labeled `YOLO SERVICE UNAVAILABLE — SIMULATED FALLBACK ACTIVE` when external YOLO is unreachable |
+| Gemini Scene Inspection | REAL WHEN CONFIGURED | Server-side `@google/genai` (`gemini-3.8-flash`) multimodal scene inspection |
+| Digital Twin Traffic | SIMULATED | Mulberry32 PRNG arrival/departure simulation across 96 bays |
+| Recommendation Engine | PROTOTYPE | Transparent 100-point multi-factor heuristic objective function |
+| Demand Prediction | PROTOTYPE | Holt's Double Exponential Smoothing (`S_t`, `b_t`) with configurable `α` |
+| Anomaly Detection | REAL (RULES) | Deterministic threshold rules over rolling telemetry |
+| Indoor Navigation | PROTOTYPE | Entrance-aware 2D vector waypoint & ramp routing |
 
 ---
 
-## 6. Computer Vision & Bay Occupancy Logic
-
-### Spatial IoU
-
-```text
-IoU =
-Area(BoundingBox ∩ BayPolygon)
---------------------------------
-Area(BayPolygon)
-```
-
-### Classification
-
-- IoU ≥ 0.45 → Candidate Occupied
-- IoU ≤ 0.15 → Candidate Available
-- 0.15 < IoU < 0.45 → Indeterminate / Low Confidence
-
-The system does not derive IoU from previous parking-bay status.
-
-### Temporal Filtering
-
-Three consecutive compatible detection cycles are required before committing an occupancy state change.
-
-This helps reduce temporary changes caused by visual noise, shadows, or passing objects.
-
----
-
-## 7. Recommendation Scoring
-
-The prototype uses a transparent 100-point scoring model:
-
-```text
-Score =
-Availability     25
-Distance         25
-Accessibility    15
-EV Alignment     15
-Aisle Condition  10
-Stability        10
---------------------
-Total            100
-```
-
-Distance uses a decay function based on walking distance.
-
-Hard constraints such as accessibility and EV requirements can filter incompatible bays before scoring.
-
-Scores are explicitly presented as **Prototype Heuristic Scores**.
-
----
-
-## 8. Short-Term Prediction
-
-ParkSight uses Holt's Double Exponential Smoothing.
-
-The prototype provides occupancy forecasts for:
-
-- +10 minutes
-- +20 minutes
-- +30 minutes
-
-Confidence intervals are derived from recent forecasting residuals.
-
-The implementation is documented as double exponential smoothing rather than full seasonal Holt-Winters.
-
----
-
-## 9. Rule-Based Anomaly Detection
-
-The system includes deterministic operational rules for:
-
-- Rapid occupancy changes
-- Parking-bay state chatter
-- High facility occupancy
-- Camera heartbeat timeout
-- EV infrastructure mismatch
-
-Each detected anomaly can provide:
-
-- What happened
-- Why it was flagged
-- Recommended action
-
----
-
-## 10. REST API
+## 6. REST API Reference
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/api/parking` | Parking lots and bays |
-| GET | `/api/occupancy` | Occupancy metrics |
-| POST | `/api/recommendations` | Parking recommendations |
-| POST | `/api/recommendations/feedback` | Recommendation feedback |
-| GET | `/api/navigation/route` | Navigation route |
-| GET | `/api/analytics` | Analytics data |
-| GET | `/api/prediction` | Forecast data |
-| GET | `/api/alerts` | System alerts |
-| POST | `/api/alerts/:id/read` | Acknowledge alert |
-| POST | `/api/feedback` | Parking-status feedback |
-| POST | `/api/detection/analyze` | Detection analysis |
-| POST | `/api/detection/propagate` | Propagate detections |
-| POST | `/api/simulation/settings` | Simulation controls |
-| POST | `/api/simulation/step` | Simulation step |
-| POST | `/api/simulation/reset` | Reset simulation |
-| GET | `/api/system-status` | Subsystem health |
+| GET | `/api/health` | Service health check, runtime mode, and external YOLO configuration flag |
+| GET | `/api/parking` | Authoritative 96-bay state, 4 facility lots, recent events, and active mode |
+| GET | `/api/lots` | Multi-lot directory with verified `available + occupied + reserved + maintenance = total` math |
+| GET | `/api/occupancy` | Live occupancy metrics (supports `?lotId=campus-deck\|north-lot\|south-lot\|visitor-deck`) |
+| POST | `/api/recommendations` | Entrance-aware 100-point heuristic recommendations & hard constraint filtering |
+| POST | `/api/recommendations/feedback` | Driver recommendation acceptance & rating feedback |
+| GET | `/api/navigation/route` | Turn-by-turn indoor waypoint routing (`?bayId=&entrance=`) |
+| GET | `/api/analytics` | Historical & diurnal time-series telemetry (`?range=today\|7d\|30d`) |
+| GET | `/api/prediction` | Holt's Double Exponential Smoothing (`?horizon=10\|20\|30&alpha=0.1..0.8`) |
+| GET | `/api/alerts` | Rule-based anomaly & operations alerts |
+| POST | `/api/alerts/:id/read` | Acknowledge operational alert |
+| POST | `/api/feedback` | Crowd-sourced bay status dispute override |
+| POST | `/api/detection/analyze` | 6-stage CV pipeline with external YOLO adapter + honest fallback |
+| POST | `/api/detection/propagate` | Propagate CV detections into authoritative store (protects reserved/maintenance stalls) |
+| POST | `/api/vision/gemini-inspect` | Server-side Gemini 3.8 Flash multimodal environmental inspection (PNG/JPEG/WebP) |
+| POST | `/api/simulation/settings` | Digital Twin speed, scenario presets, and Mulberry32 PRNG seed control |
+| POST | `/api/simulation/step` | Advance deterministic simulation by 1 tick (+2 simulated minutes) |
+| POST | `/api/simulation/reset` | Reset baseline while preserving reserved & maintenance bay allocations |
+| GET | `/api/system-status` | Genuine subsystem health audit (`ONLINE` / `SIMULATED FALLBACK` / `NOT CONFIGURED`) |
+| GET | `/api/observability` | Rolling API latency, tick rate, event counter, and error telemetry |
 
 ---
 
-## 11. Automated Testing
-
-The project includes an automated test harness covering:
-
-- Occupancy calculation
-- Temporal hysteresis
-- Recommendation scoring
-- Fallback handling
-- Navigation
-- Event management
-- Spatial IoU
-- Prediction
-- Deterministic simulation
-- Computer-vision pipeline
-- Review 2 technical integrity checks
-
-Run:
+## 7. Running Locally & Verification
 
 ```bash
-npm test
-```
-
----
-
-## 12. Running Locally
-
-Install dependencies:
-
-```bash
+# Install dependencies
 npm install
+
+# Start full-stack Express + Vite server on port 3000
+npm run dev
+
+# Run 12-suite automated verification harness
+npm test
+
+# Type-check client and server TypeScript
+npm run lint
+
+# Build production SPA bundle and start Node 22 native TypeScript server
+npm run build
+npm start
 ```
 
-Configure `.env` when using Gemini:
+Optional `.env` configuration (see `.env.example`):
 
 ```env
 GEMINI_API_KEY="your-gemini-api-key"
-```
-
-Start development server:
-
-```bash
-npm run dev
-```
-
-Run tests:
-
-```bash
-npm test
-```
-
-Build:
-
-```bash
-npm run build
+YOLO_SERVICE_URL="http://localhost:8000/api/v1/yolo/detect"
 ```
 
 ---
 
-## 13. Project Status
+## 8. Deployment & Vercel Serverless Support
 
-ParkSight AI is an academic prototype and demonstration system.
-
-It combines:
-
-- Computer vision architecture
-- Parking occupancy logic
-- Simulation
-- Explainable recommendations
-- Prediction
-- Anomaly detection
-- Navigation
-- Human feedback
-- Responsible AI practices
-
----
-
-## 14. YOLO Integration
-
-The project uses a modular YOLO integration architecture.
-
-The web application communicates with an external YOLO inference service through HTTP.
-
-When the service is unavailable, the system does not falsely report real YOLO detection. Instead, it clearly identifies the simulated/test fallback.
-
----
-
-## 15. Privacy
-
-ParkSight AI follows a privacy-by-design approach.
-
-The prototype:
-
-- Does not perform facial recognition
-- Avoids storing unnecessary personal information
-- Treats vehicle imagery as transient processing input
-- Clearly separates real and simulated data paths
-
----
-
-## 16. Limitations
-
-The current project does not bundle a local YOLO neural model runtime.
-
-Real YOLO inference therefore requires a compatible external inference service.
-
-The parking simulation, recommendation scoring, prediction, and navigation modules are prototype implementations and require further real-world validation before production deployment.
-
----
-
-## 17. Project Purpose
-
-ParkSight AI demonstrates how computer vision, data processing, AI-assisted reasoning, and software engineering can be combined to explore a real-world parking problem.
-
-The project is intended for academic evaluation, experimentation, and future extension.
+- **Container / Node 22 Runtime**: Runs as a unified Express + SPA server via `npm run build && npm start` (`node server.ts` on port `3000`).
+- **Vercel Serverless Compatibility (`vercel.json` + `api/index.ts`)**: Earlier static-only deployments (`https://parksight-ai-six.vercel.app`) served pre-rendered frontend assets without mounting Express, causing `/api/*` endpoints to return HTTP `404`. Review 3 includes `api/index.ts` and `vercel.json` rewrites so redeploying this repository to Vercel mounts the full Express `/api/*` router as a Vercel Serverless Function alongside the static Vite `dist/` bundle (with poll-driven simulation ticks when `process.env.VERCEL` is active). Because serverless functions keep in-memory state per warm lambda instance rather than across cold starts, full multi-instance persistence requires an external database or a single-container host.

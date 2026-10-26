@@ -31,19 +31,24 @@ export async function fetchParkingData(): Promise<{
   return res.json();
 }
 
-export async function fetchOccupancyMetrics(): Promise<{
+export async function fetchOccupancyMetrics(lotId = 'campus-deck'): Promise<{
+  lotId?: string;
+  lotName?: string;
   totalBays: number;
   availableSpaces: number;
   occupiedSpaces: number;
+  reservedSpaces?: number;
+  maintenanceSpaces?: number;
   occupancyPercentage: number;
   activeVehicles: number;
   averageSearchTimeMinutes: number;
   currentAlertsCount: number;
+  hasDetailedBayMap?: boolean;
   isSimulated: boolean;
   dataSource: string;
   lastUpdated: string;
 }> {
-  const res = await fetch('/api/occupancy');
+  const res = await fetch(`/api/occupancy?lotId=${encodeURIComponent(lotId)}`);
   if (!res.ok) throw new Error('Failed to fetch occupancy metrics');
   return res.json();
 }
@@ -181,12 +186,13 @@ export async function analyzeDetectionImage(
   engineType: 'simulation' | 'yolo_interface',
   imageBase64?: string,
   runGeminiInspection = false,
-  yoloEndpoint?: string
+  yoloEndpoint?: string,
+  presetId?: string
 ): Promise<DetectionResult> {
   const res = await fetch('/api/detection/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ engineType, imageBase64, runGeminiInspection, yoloEndpoint }),
+    body: JSON.stringify({ engineType, imageBase64, runGeminiInspection, yoloEndpoint, presetId }),
   });
   if (!res.ok) throw new Error('Detection request failed');
   return res.json();
@@ -221,7 +227,7 @@ export async function fetchSimulationState(): Promise<SimulationSettings> {
 export async function updateSimulation(
   isRunning: boolean,
   speed?: '0.5x' | '1x' | '2x' | '5x',
-  seed?: number,
+  seed?: number | string,
   scenarioPreset?: 'morning_rush' | 'midday_turnover' | 'evening_exodus' | 'night_lull' | 'camera_failure' | 'unusual_spike'
 ): Promise<SimulationSettings> {
   const res = await fetch('/api/simulation/settings', {
@@ -262,8 +268,11 @@ export async function resetSimulationState(): Promise<any> {
   return res.json();
 }
 
-export async function fetchStatisticalPrediction(horizonMinutes = 30): Promise<StatisticalPrediction> {
-  const res = await fetch(`/api/prediction?horizon=${horizonMinutes}`);
+export async function fetchStatisticalPrediction(
+  horizonMinutes = 30,
+  alpha = 0.35
+): Promise<StatisticalPrediction> {
+  const res = await fetch(`/api/prediction?horizon=${horizonMinutes}&alpha=${alpha}`);
   if (!res.ok) throw new Error('Failed to fetch statistical prediction');
   return res.json();
 }
